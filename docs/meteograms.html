@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ZJX Model Meteograms | MCO JAX SAV CHS DAB SFB TLH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=optional" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF2F1; --panel:#FFFFFF; --panel-2:#F6F8F8; --ink:#13202E; --ink-2:#4B5A68; --ink-3:#7D8B97;
+  --rule:#D4DBDF; --rule-2:#E6EBED; --accent:#0B6E79; --accent-ink:#FFFFFF; --edit:#B5730C; --edit-bg:#FFF4DF;
+  --warn:#B23A2E; --warn-bg:#FBE9E6; --ok:#2F7A4A;
+  --c1:#F6D58A; --c2:#EFA765; --c3:#E07152; --c4:#C2414A; --c5:#8E2F5B;
+  --hires:#7A4FA0; --blend:#0B6E79; --global:#3D6FB0; --ens:#8A9AA8; --mos:#B5730C; --ct:#B4472A; --peak:#3359A8;
+  --p:11,110,121; --hot:178,58,46; --cold:52,102,170;
+  --font:"Barlow", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --cond:"Barlow Condensed", "Arial Narrow", "Segoe UI", Arial, sans-serif;
+  --mono:"IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D151D; --panel:#142029; --panel-2:#18252F; --ink:#E5ECF1; --ink-2:#A3B1BD; --ink-3:#73828F;
+    --rule:#283844; --rule-2:#1F2D38; --accent:#4DBFC8; --accent-ink:#06232A; --edit:#E3A53D; --edit-bg:#3A2A0E;
+    --warn:#F08070; --warn-bg:#3B1C18; --ok:#6CC08A;
+    --c1:#6B5A26; --c2:#7A4A26; --c3:#80382A; --c4:#7A2430; --c5:#5E1E44;
+    --hires:#B892DA; --blend:#4DBFC8; --global:#7FA8E0; --ens:#6E7F8D; --mos:#E3A53D; --ct:#F08A6A; --peak:#93B4F0;
+    --p:77,191,200; --hot:240,128,112; --cold:120,160,230;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D151D; --panel:#142029; --panel-2:#18252F; --ink:#E5ECF1; --ink-2:#A3B1BD; --ink-3:#73828F;
+  --rule:#283844; --rule-2:#1F2D38; --accent:#4DBFC8; --accent-ink:#06232A; --edit:#E3A53D; --edit-bg:#3A2A0E;
+  --warn:#F08070; --warn-bg:#3B1C18; --ok:#6CC08A;
+  --c1:#6B5A26; --c2:#7A4A26; --c3:#80382A; --c4:#7A2430; --c5:#5E1E44;
+  --p:77,191,200; color-scheme: dark;
+}
+:root{ box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
+*,*::before,*::after{ box-sizing:inherit; }
+html{ scroll-padding-top:env(safe-area-inset-top,0px); }
+body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.45 var(--font); font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased; }
+button,input,select,textarea{ font:inherit; color:inherit; }
+:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+a{ color:var(--accent); }
+
+.top{ display:grid; grid-template-columns:1fr auto; gap:14px 28px; align-items:center; padding:18px 28px 16px; background:var(--panel); border-bottom:1px solid var(--rule); }
+.top h1{ margin:0; font:700 26px/1 var(--cond); }
+.top .where{ margin-top:6px; color:var(--ink-2); font-size:14px; }
+.top .where b{ color:var(--ink); }
+.actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.btn{ border:1px solid var(--rule); background:var(--panel); border-radius:8px; padding:7px 13px; cursor:pointer; font-weight:500; white-space:nowrap; text-decoration:none; color:var(--ink); display:inline-block; }
+.btn:hover{ border-color:var(--ink-3); }
+.btn.primary{ background:var(--ink); color:var(--panel); border-color:var(--ink); font-weight:600; padding:8px 18px; }
+.seg{ display:inline-flex; border:1px solid var(--rule); border-radius:8px; overflow:hidden; }
+.seg button{ border:0; background:var(--panel); padding:6px 12px; cursor:pointer; font-size:13.5px; }
+.seg button[aria-pressed="true"]{ background:var(--ink); color:var(--panel); }
+
+.statusline{ display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center; padding:10px 28px; font-size:13.5px; color:var(--ink-2); border-bottom:1px solid var(--rule); background:var(--panel-2); }
+.statusline .k{ color:var(--ink-3); margin-right:6px; }
+.statusline .live::before{ content:""; display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--accent); margin-right:7px; vertical-align:1px; }
+.statusline .live.err::before{ background:var(--warn); }
+.statusline label{ display:inline-flex; gap:7px; align-items:center; }
+.statusline input{ width:78px; padding:3px 7px; border:1px solid var(--rule); border-radius:6px; background:var(--panel); font-family:var(--mono); }
+.statusline .sp{ flex:1; }
+.stnline{ background:var(--panel); }
+.stnother{ display:inline-flex; gap:10px; align-items:center; }
+.stnother[hidden]{ display:none; }
+.statusline select{ border:1px solid var(--rule); border-radius:6px; padding:3px 6px; background:var(--panel); }
+.banner{ margin:14px 28px 0; padding:10px 14px; border-radius:8px; background:var(--warn-bg); color:var(--warn); font-weight:500; display:none; }
+.banner.show{ display:block; }
+.banner.demo{ background:var(--edit-bg); color:var(--edit); }
+
+main{ padding:18px 28px 40px; display:grid; gap:18px; }
+main > *{ min-width:0; }
+[hidden]{ display:none !important; }
+.tbrand{ display:flex; gap:14px; align-items:center; }
+.unitlogo{ height:60px; width:auto; flex:none; filter:drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
+.pagenav{ display:flex; gap:2px; padding:8px 28px 0; background:var(--panel); border-bottom:1px solid var(--rule); }
+.pagenav{ align-items:center; flex-wrap:wrap; }
+.pagenav a{ white-space:nowrap; }
+.pagenav .navsp{ flex:1; }
+.pagenav a.offl{ font:500 13px var(--font); border-bottom:0; margin-right:10px; }
+.pagenav .theme{ margin:0 0 4px; }
+.pagenav .theme button{ padding:4px 10px; font-size:12.5px; }
+.pagenav a{ padding:8px 16px 9px; font:600 15px var(--cond); letter-spacing:.2px; color:var(--ink-2); text-decoration:none; border-bottom:3px solid transparent; }
+.pagenav a:hover{ color:var(--ink); }
+.pagenav a[aria-current="page"]{ color:var(--accent); border-bottom-color:var(--accent); }
+.panel{ background:var(--panel); border:1px solid var(--rule); border-radius:12px; }
+
+/* TAF text: the product itself */
+.taf{ padding:16px 18px 14px; }
+.tafhead{ display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:10px; }
+.tafhead h2{ margin:0; font:700 22px/1 var(--cond); }
+.tafhead .note{ color:var(--ink-3); font-size:13px; flex:1; }
+.tafhead .note.edited{ color:var(--edit); }
+textarea#taf{ width:100%; resize:vertical; border:1px solid var(--rule); border-radius:10px; background:var(--panel-2); padding:14px 16px; font:500 16px/1.75 var(--mono); letter-spacing:.2px; white-space:pre; overflow:auto; }
+textarea#taf:focus{ outline:2px solid var(--accent); outline-offset:-1px; background:var(--panel); }
+.lint{ margin:10px 0 0; padding:0; list-style:none; display:grid; gap:4px; font-size:13.5px; }
+.lint li{ display:flex; gap:8px; align-items:baseline; }
+.lint li::before{ content:""; flex:none; width:7px; height:7px; border-radius:50%; background:var(--warn); transform:translateY(-1px); }
+.lint li.ok{ color:var(--ok); }
+.lint li.ok::before{ background:var(--ok); }
+.lint li.err{ color:var(--warn); }
+.lint li.info{ color:var(--ink-2); }
+.lint li.info::before{ background:var(--ink-3); }
+.lint code{ font:500 13px var(--mono); background:var(--panel-2); padding:0 4px; border-radius:4px; }
+
+/* hourly guidance strip */
+.strip{ padding:14px 0 6px; }
+.strip h2{ margin:0 18px 2px; font:700 20px/1 var(--cond); }
+.strip .sub{ margin:4px 18px 10px; color:var(--ink-3); font-size:13px; }
+.gridwrap{ overflow-x:auto; }
+table.hr{ border-collapse:separate; border-spacing:0; font-size:13px; width:max-content; min-width:100%; }
+.hr th,.hr td{ border-bottom:1px solid var(--rule-2); border-right:1px solid var(--rule-2); padding:4px 6px; text-align:center; white-space:nowrap; }
+.hr th.rl{ position:sticky; left:0; z-index:2; background:var(--panel); text-align:left; font:600 13px var(--cond); color:var(--ink-2); padding:4px 12px 4px 18px; min-width:118px; border-right:1px solid var(--rule); }
+.hr thead th{ font:600 12.5px var(--cond); color:var(--ink-2); min-width:54px; }
+.hr thead th small{ display:block; color:var(--ink-3); font-weight:500; }
+.hr thead th.day{ border-left:2px solid var(--ink-3); }
+.hr td.day{ border-left:2px solid var(--ink-3); }
+.hr tr.groups td{ padding:3px 2px; font:600 11.5px var(--cond); }
+.hr .g{ display:block; border-radius:5px; padding:2px 4px; background:var(--panel-2); color:var(--ink-2); }
+.hr .g.init{ background:rgba(var(--p),.18); color:var(--ink); }
+.hr .g.becmg{ background:rgba(var(--p),.32); color:var(--ink); }
+.hr .g.tempo{ background:var(--edit-bg); color:var(--edit); }
+.hr td.c1{ background:var(--c1); } .hr td.c2{ background:var(--c2); } .hr td.c3{ background:var(--c3); color:#fff; } .hr td.c4{ background:var(--c4); color:#fff; } .hr td.c5{ background:var(--c5); color:#fff; }
+.hr td.mono{ font-family:var(--mono); font-size:12.5px; }
+.hr td.p{ font-weight:600; }
+
+/* settings + sources */
+details.cfg > summary{ list-style:none; cursor:pointer; padding:12px 16px; display:flex; gap:12px; align-items:center; font-weight:600; }
+details.cfg > summary::-webkit-details-marker{ display:none; }
+details.cfg > summary .chev{ color:var(--ink-3); transition:transform .15s; }
+details.cfg[open] > summary .chev{ transform:rotate(90deg); }
+details.cfg > summary .sum{ font-weight:400; color:var(--ink-2); font-size:13.5px; }
+.cfggrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:16px 26px; padding:4px 16px 18px; }
+.cfggrid h3{ margin:0 0 6px; font:600 13px var(--cond); color:var(--ink-3); letter-spacing:.3px; }
+.cfggrid label{ display:flex; justify-content:space-between; gap:10px; align-items:center; font-size:13.5px; padding:3px 0; }
+.cfggrid input{ width:110px; border:1px solid var(--rule); border-radius:6px; padding:3px 7px; background:var(--panel); font-family:var(--mono); font-size:13px; }
+.cfggrid input[type=checkbox]{ width:auto; }
+.srow{ display:flex; gap:8px; align-items:center; font-size:13.5px; padding:2px 0; }
+.srow .st{ font-size:12px; color:var(--ink-3); }
+.srow.na{ color:var(--ink-3); }
+.foot{ color:var(--ink-3); font-size:12.5px; max-width:100ch; }
+.foot p{ margin:4px 0; }
+.toast{ position:fixed; left:50%; bottom:calc(22px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%) translateY(20px); background:var(--ink); color:var(--panel); padding:10px 18px; border-radius:10px; font-weight:500; opacity:0; transition:all .2s; pointer-events:none; z-index:50; }
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+@media (max-width:760px){
+  .top{ grid-template-columns:1fr; }
+  .top,.statusline,main{ padding-left:14px; padding-right:14px; }
+  .banner{ margin-left:14px; margin-right:14px; }
+  textarea#taf{ font-size:14px; }
+}
+@media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
+</style>
+<style>
+.tbrand{ display:flex; gap:14px; align-items:center; }
+.stamp{ font:13px var(--mono); color:var(--ink-3); }
+.wrap{ max-width:1680px; margin:0 auto; padding:16px 28px 32px; display:grid; gap:12px; }
+.row{ display:flex; flex-wrap:wrap; gap:6px; align-items:stretch; }
+.row .lbl{ font:600 12px var(--cond); letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); align-self:center; min-width:62px; }
+.tab{ display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:104px; padding:8px 14px; border:1px solid var(--rule); border-radius:8px; background:var(--panel); color:var(--ink); cursor:pointer; font:600 15px/1 var(--cond); letter-spacing:.03em; }
+.tab small{ font:400 11.5px/1 var(--mono); color:var(--ink-3); letter-spacing:0; }
+.tab[aria-selected="true"]{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+.tab[aria-selected="true"] small{ color:var(--accent-ink); opacity:.85; }
+.sitetab{ min-width:76px; }
+.row .btn{ margin-left:auto; align-self:center; }
+figure{ margin:0; background:#fff; border:1px solid var(--rule); border-radius:8px; overflow-x:auto; position:relative; min-height:220px; }
+figure canvas{ display:block; width:100%; min-width:900px; height:auto; }
+.msg{ position:absolute; inset:0; display:grid; place-items:center; font:14px var(--mono); color:#335; background:rgba(255,255,255,.85); padding:20px; text-align:center; }
+.msg.err{ color:#8a1c1c; }
+.note{ color:var(--ink-2); font-size:13.5px; max-width:120ch; margin:0; }
+.note b{ color:var(--ink); font-weight:600; }
+.now{ color:#d61f1f; font-weight:700; }
+@media (max-width:700px){ .wrap{ padding:12px 12px 28px; } .tab{ min-width:0; } }
+</style>
+<script>
+/* color theme shared by all pages: auto (follow the system), light or dark */
+(function(){ var t; try { t = localStorage.getItem("erwx:theme"); } catch (e) {} if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); })();
+document.addEventListener("DOMContentLoaded", function(){
+  var cur = function(){ return document.documentElement.getAttribute("data-theme") || "auto"; };
+  var mark = function(){ document.querySelectorAll(".theme [data-th]").forEach(function(b){ b.setAttribute("aria-pressed", b.getAttribute("data-th") === cur()); }); };
+  document.querySelectorAll(".theme [data-th]").forEach(function(b){ b.addEventListener("click", function(){
+    var t = b.getAttribute("data-th");
+    if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t);
+    try { localStorage.setItem("erwx:theme", t); } catch (e) {}
+    mark(); window.dispatchEvent(new Event("themechange"));
+  }); });
+  mark();
+});
+</script>
+</head>
+<body>
+<nav class="pagenav" aria-label="Products"><a href="./" data-page="planning">Planning forecast</a><a href="taf.html" data-page="taf">TAF, CWA and MIS</a><a href="meteograms.html" data-page="meteograms" aria-current="page">Meteograms</a><span class="navsp"></span><span class="seg theme" role="group" aria-label="Color theme"><button type="button" data-th="auto">Auto</button><button type="button" data-th="light">Light</button><button type="button" data-th="dark">Dark</button></span></nav>
+<header class="top">
+  <div class="tbrand"><img class="unitlogo" src="zjx-logo.png" alt="CWSU ZJX" onerror="this.remove()"><div>
+    <h1 id="title">Time-height meteograms</h1>
+    <div class="where" id="where"></div>
+  </div></div>
+  <span class="stamp" id="stamp">Loading…</span>
+</header>
+<div class="wrap">
+  <div class="row" role="tablist" aria-label="Airport" id="sites"><span class="lbl">Airport</span></div>
+  <div class="row" role="tablist" aria-label="Model" id="models"><span class="lbl">Model</span>
+    <button class="tab" role="tab" data-k="gfs">GFS<small id="s-gfs">7 days</small></button>
+    <button class="tab" role="tab" data-k="ecmwf">ECMWF<small id="s-ecmwf">7 days</small></button>
+    <button class="tab" role="tab" data-k="ukmo">UKMET<small id="s-ukmo">~7 days</small></button>
+    <button class="tab" role="tab" data-k="icon">ICON<small id="s-icon">7 days</small></button>
+    <button class="tab" role="tab" data-k="gem">GEM<small id="s-gem">7 days</small></button>
+    <button class="tab" role="tab" data-k="hrrr">HRRR<small id="s-hrrr">48 hours</small></button>
+    <button class="btn" id="refresh" type="button">Refresh data</button>
+  </div>
+  <figure id="fig"><div class="msg" id="msg">Fetching model data…</div></figure>
+  <p class="note">RH ≥70/80/90% shaded green, isotherms +5 to −20 °C (0 °C in blue), wind barbs colored by speed, and the red <span class="now">NOW</span> line at the current time. Each chart is drawn in your browser from the newest run available when the page opens, at the model grid point nearest the airport. All six models come from <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>: <b>GFS</b> (NOAA), <b>ECMWF</b> IFS, <b>UKMET</b> (Met Office Global 10 km), <b>ICON</b> (DWD Global), <b>GEM</b> (Environment Canada Global) and <b>HRRR</b> (NOAA 3 km, 48 hours). Each chart uses the pressure levels that model provides. Arrow keys switch models; Shift + arrow keys switch airports. Link to one chart with <code>?site=kjax&amp;model=hrrr</code>.</p>
+  <p class="note">Adapted from <a href="https://github.com/astromet/ksc-meteograms" target="_blank" rel="noopener">astromet/ksc-meteograms</a>.</p>
+</div>
+<script src="guidance.js?v=522a5cca1b"></script>
+<script src="meteogram.js?v=6b50625665"></script>
+<script>
+/* the ZJX core airports, from SITES in guidance.js */
+const MG_SITES = SITES.map(s => ({ id: s.id, stn: s.stn, name: s.name, lat: s.lat, lon: s.lon }));
+const SHORT = { kmco:"Orlando", kjax:"Jacksonville", ksav:"Savannah", kchs:"Charleston", kdab:"Daytona", ksfb:"Sanford", ktlh:"Tallahassee" };
+const MODELS = ["gfs", "ecmwf", "ukmo", "icon", "gem", "hrrr"];
+const cache = {};
+const $ = id => document.getElementById(id);
+const fig = $("fig"), msg = $("msg");
+const pad = n => String(n).padStart(2, "0");
+const q = new URLSearchParams(location.search);
+let site = MG_SITES[0].id, current = "gfs";
+try { const s = localStorage.getItem("zjx:mg-site"), m = localStorage.getItem("zjx:mg-model"); if (MG_SITES.some(x => x.id === s)) site = s; if (MODELS.includes(m)) current = m; } catch (e) {}
+if (MG_SITES.some(x => x.id === (q.get("site") || "").toLowerCase())) site = q.get("site").toLowerCase();
+if (MODELS.includes((q.get("model") || "").toLowerCase())) current = q.get("model").toLowerCase();
+$("sites").insertAdjacentHTML("beforeend", MG_SITES.map(s => `<button class="tab sitetab" role="tab" data-site="${s.id}" title="${s.name}">${s.stn}<small>${SHORT[s.id] || s.name.split(/[ /]/)[0]}</small></button>`).join(""));
+const siteTabs = [...document.querySelectorAll("[data-site]")], modelTabs = [...document.querySelectorAll("#models .tab")];
+const S = () => MG_SITES.find(x => x.id === site);
+
+function build(sid, m){
+  const key = sid + ":" + m, s = MG_SITES.find(x => x.id === sid);
+  if (!cache[key]) cache[key] = buildMeteogram({ model: m, lat: s.lat, lon: s.lon, site: s.stn, name: s.name, W: 1600, H: 889 }).then(r => {
+    if (sid === site) setLabel(m, r);
+    return r;
+  }).catch(e => { delete cache[key]; throw e; });
+  return cache[key];
+}
+async function show(sid, m){
+  site = sid; current = m;
+  try { localStorage.setItem("zjx:mg-site", sid); localStorage.setItem("zjx:mg-model", m); } catch (e) {}
+  const s = S();
+  siteTabs.forEach(t => t.setAttribute("aria-selected", String(t.dataset.site === sid)));
+  modelTabs.forEach(t => t.setAttribute("aria-selected", String(t.dataset.k === m)));
+  $("title").textContent = `${s.stn} time-height meteograms`;
+  $("where").innerHTML = `<b>${s.name}</b> · ${s.lat.toFixed(3)}°N ${Math.abs(s.lon).toFixed(3)}°W`;
+  document.title = `${s.stn} Meteograms | ZJX`;
+  history.replaceState(null, "", `?site=${sid}&model=${m}`);
+  fig.querySelectorAll("canvas").forEach(c => c.remove());
+  msg.hidden = false; msg.className = "msg"; msg.textContent = `Fetching ${m.toUpperCase()} for ${s.stn}…`;
+  try {
+    const r = await build(sid, m);
+    if (site !== sid || current !== m) return;
+    setLabel(m, r);
+    r.canvas.setAttribute("aria-label", `${m.toUpperCase()} time-height meteogram for ${s.stn}`);
+    fig.appendChild(r.canvas); msg.hidden = true;
+  } catch (e) {
+    if (site !== sid || current !== m) return;
+    msg.className = "msg err"; msg.textContent = "Could not load this model: " + e.message + " Try Refresh data in a minute.";
+  }
+}
+function setLabel(m, r){ const len = r.hours >= 120 ? Math.round(r.hours/24) + " days" : r.hours + " hours"; $("s-" + m).textContent = (r.run ? `${pad(r.run.getUTCHours())}Z run · ` : "") + len; }
+function resetLabels(){ for (const m of MODELS) $("s-" + m).textContent = m === "hrrr" ? "48 hours" : m === "ukmo" ? "~7 days" : "7 days"; }
+function stamp(){ const d = new Date(); $("stamp").textContent = `Drawn ${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z · ${d.toLocaleString("en-US", { timeZone:"America/New_York", weekday:"short", hour:"numeric", minute:"2-digit", timeZoneName:"short" })}`; }
+/* load the other models for the airport on screen, one at a time (Open-Meteo rate limits) */
+async function prefetch(sid){ for (const m of MODELS){ if (site !== sid) return; if (m !== current){ try { const r = await build(sid, m); if (site === sid) setLabel(m, r); } catch (e) {} } } }
+function go(sid, m){ const changedSite = sid !== site; if (changedSite) resetLabels(); show(sid, m).then(() => { if (changedSite || !go.started){ go.started = true; prefetch(sid); } }); }
+modelTabs.forEach(t => t.addEventListener("click", () => go(site, t.dataset.k)));
+siteTabs.forEach(t => t.addEventListener("click", () => go(t.dataset.site, current)));
+document.addEventListener("keydown", e => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const d = e.key === "ArrowRight" ? 1 : -1;
+  if (e.shiftKey){ const i = MG_SITES.findIndex(x => x.id === site), n = MG_SITES[(i + d + MG_SITES.length) % MG_SITES.length].id; go(n, current); document.querySelector(`[data-site="${n}"]`).focus(); }
+  else { const i = MODELS.indexOf(current), n = MODELS[(i + d + MODELS.length) % MODELS.length]; go(site, n); document.querySelector(`#models [data-k="${n}"]`).focus(); }
+  e.preventDefault();
+});
+$("refresh").addEventListener("click", () => { for (const k in cache) delete cache[k]; resetLabels(); stamp(); go.started = false; go(site, current); });
+stamp(); go(site, current);
+</script>
+</body>
+</html>

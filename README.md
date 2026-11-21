@@ -1,7 +1,7 @@
 # ZJX Planning Forecast
 
 Terminal planning forecast, TAF generator and CWA/MIS drafter for CWSU Jacksonville (ZJX) operations.
-Static pages on GitHub Pages; everything runs in the browser, and two GitHub Actions workflows mirror
+Terminal planning forecast, TAF/CWA/MIS tools and model meteograms as static pages on GitHub Pages; everything runs in the browser, and two GitHub Actions workflows mirror
 guidance the browser can't fetch directly.
 
 Adapted from [cyclonecizek/ERPlanningForecast](https://github.com/cyclonecizek/ERPlanningForecast)
@@ -73,6 +73,15 @@ crosswind) for each airport and time window from the planning forecast saved in 
 contractions. **Log as issued** keeps a record in this browser so the next number is right.
 
 Nothing on this page is sent anywhere: copy the text into your normal dissemination system.
+
+### Meteograms (`meteograms.html`)
+Time-height meteograms for each airport from GFS, ECMWF IFS, UKMET, ICON, GEM (7 days) and HRRR (48 hours),
+drawn in the browser from Open-Meteo each time the page opens: RH ≥70/80/90% shaded, isotherms +5 to −20 °C
+(0 °C blue), wind barbs colored by speed, a NOW line, and approximate heights on the right axis. Pick the
+airport and model with the tabs (arrow keys switch models, Shift + arrow keys switch airports); link to one
+chart with `meteograms.html?site=kjax&model=hrrr`. Adapted from
+[astromet/ksc-meteograms](https://github.com/astromet/ksc-meteograms); the airports come from `SITES` in
+`docs/guidance.js`.
 
 ## Guidance
 * Open-Meteo, fetched by the page: HRRR, NBM, GFS, ECMWF IFS and AIFS, ICON, GEM, UKMO, plus GEFS,
