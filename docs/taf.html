@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TAF Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=optional" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF2F1; --panel:#FFFFFF; --panel-2:#F6F8F8; --ink:#13202E; --ink-2:#4B5A68; --ink-3:#7D8B97;
+  --rule:#D4DBDF; --rule-2:#E6EBED; --accent:#0B6E79; --accent-ink:#FFFFFF; --edit:#B5730C; --edit-bg:#FFF4DF;
+  --warn:#B23A2E; --warn-bg:#FBE9E6; --ok:#2F7A4A;
+  --c1:#F6D58A; --c2:#EFA765; --c3:#E07152; --c4:#C2414A; --c5:#8E2F5B;
+  --hires:#7A4FA0; --blend:#0B6E79; --global:#3D6FB0; --ens:#8A9AA8; --mos:#B5730C; --ct:#B4472A; --peak:#3359A8;
+  --p:11,110,121; --hot:178,58,46; --cold:52,102,170;
+  --font:"Barlow", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --cond:"Barlow Condensed", "Arial Narrow", "Segoe UI", Arial, sans-serif;
+  --mono:"IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D151D; --panel:#142029; --panel-2:#18252F; --ink:#E5ECF1; --ink-2:#A3B1BD; --ink-3:#73828F;
+    --rule:#283844; --rule-2:#1F2D38; --accent:#4DBFC8; --accent-ink:#06232A; --edit:#E3A53D; --edit-bg:#3A2A0E;
+    --warn:#F08070; --warn-bg:#3B1C18; --ok:#6CC08A;
+    --c1:#6B5A26; --c2:#7A4A26; --c3:#80382A; --c4:#7A2430; --c5:#5E1E44;
+    --hires:#B892DA; --blend:#4DBFC8; --global:#7FA8E0; --ens:#6E7F8D; --mos:#E3A53D; --ct:#F08A6A; --peak:#93B4F0;
+    --p:77,191,200; --hot:240,128,112; --cold:120,160,230;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D151D; --panel:#142029; --panel-2:#18252F; --ink:#E5ECF1; --ink-2:#A3B1BD; --ink-3:#73828F;
+  --rule:#283844; --rule-2:#1F2D38; --accent:#4DBFC8; --accent-ink:#06232A; --edit:#E3A53D; --edit-bg:#3A2A0E;
+  --warn:#F08070; --warn-bg:#3B1C18; --ok:#6CC08A;
+  --c1:#6B5A26; --c2:#7A4A26; --c3:#80382A; --c4:#7A2430; --c5:#5E1E44;
+  --p:77,191,200; color-scheme: dark;
+}
+:root{ box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
+*,*::before,*::after{ box-sizing:inherit; }
+html{ scroll-padding-top:env(safe-area-inset-top,0px); }
+body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.45 var(--font); font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased; }
+button,input,select,textarea{ font:inherit; color:inherit; }
+:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+a{ color:var(--accent); }
+
+.top{ display:grid; grid-template-columns:1fr auto; gap:14px 28px; align-items:center; padding:18px 28px 16px; background:var(--panel); border-bottom:1px solid var(--rule); }
+.top h1{ margin:0; font:700 26px/1 var(--cond); }
+.top .where{ margin-top:6px; color:var(--ink-2); font-size:14px; }
+.top .where b{ color:var(--ink); }
+.actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.btn{ border:1px solid var(--rule); background:var(--panel); border-radius:8px; padding:7px 13px; cursor:pointer; font-weight:500; white-space:nowrap; text-decoration:none; color:var(--ink); display:inline-block; }
+.btn:hover{ border-color:var(--ink-3); }
+.btn.primary{ background:var(--ink); color:var(--panel); border-color:var(--ink); font-weight:600; padding:8px 18px; }
+.seg{ display:inline-flex; border:1px solid var(--rule); border-radius:8px; overflow:hidden; }
+.seg button{ border:0; background:var(--panel); padding:6px 12px; cursor:pointer; font-size:13.5px; }
+.seg button[aria-pressed="true"]{ background:var(--ink); color:var(--panel); }
+
+.statusline{ display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center; padding:10px 28px; font-size:13.5px; color:var(--ink-2); border-bottom:1px solid var(--rule); background:var(--panel-2); }
+.statusline .k{ color:var(--ink-3); margin-right:6px; }
+.statusline .live::before{ content:""; display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--accent); margin-right:7px; vertical-align:1px; }
+.statusline .live.err::before{ background:var(--warn); }
+.statusline label{ display:inline-flex; gap:7px; align-items:center; }
+.statusline input{ width:78px; padding:3px 7px; border:1px solid var(--rule); border-radius:6px; background:var(--panel); font-family:var(--mono); }
+.statusline .sp{ flex:1; }
+.stnline{ background:var(--panel); }
+.stnother{ display:inline-flex; gap:10px; align-items:center; }
+.stnother[hidden]{ display:none; }
+.statusline select{ border:1px solid var(--rule); border-radius:6px; padding:3px 6px; background:var(--panel); }
+.banner{ margin:14px 28px 0; padding:10px 14px; border-radius:8px; background:var(--warn-bg); color:var(--warn); font-weight:500; display:none; }
+.banner.show{ display:block; }
+.banner.demo{ background:var(--edit-bg); color:var(--edit); }
+
+main{ padding:18px 28px 40px; display:grid; gap:18px; }
+main > *{ min-width:0; }
+.tbrand{ display:flex; gap:14px; align-items:center; }
+.unitlogo{ height:60px; width:auto; flex:none; filter:drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
+.pagenav{ display:flex; gap:2px; padding:8px 28px 0; background:var(--panel); border-bottom:1px solid var(--rule); }
+.pagenav{ align-items:center; flex-wrap:wrap; }
+.pagenav a{ white-space:nowrap; }
+.pagenav .navsp{ flex:1; }
+.pagenav a.offl{ font:500 13px var(--font); border-bottom:0; margin-right:10px; }
+.pagenav .theme{ margin:0 0 4px; }
+.pagenav .theme button{ padding:4px 10px; font-size:12.5px; }
+.pagenav a{ padding:8px 16px 9px; font:600 15px var(--cond); letter-spacing:.2px; color:var(--ink-2); text-decoration:none; border-bottom:3px solid transparent; }
+.pagenav a:hover{ color:var(--ink); }
+.pagenav a[aria-current="page"]{ color:var(--accent); border-bottom-color:var(--accent); }
+.panel{ background:var(--panel); border:1px solid var(--rule); border-radius:12px; }
+
+/* TAF text: the product itself */
+.taf{ padding:16px 18px 14px; }
+.tafhead{ display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:10px; }
+.tafhead h2{ margin:0; font:700 22px/1 var(--cond); }
+.tafhead .note{ color:var(--ink-3); font-size:13px; flex:1; }
+.tafhead .note.edited{ color:var(--edit); }
+textarea#taf{ width:100%; resize:vertical; border:1px solid var(--rule); border-radius:10px; background:var(--panel-2); padding:14px 16px; font:500 16px/1.75 var(--mono); letter-spacing:.2px; white-space:pre; overflow:auto; }
+textarea#taf:focus{ outline:2px solid var(--accent); outline-offset:-1px; background:var(--panel); }
+.lint{ margin:10px 0 0; padding:0; list-style:none; display:grid; gap:4px; font-size:13.5px; }
+.lint li{ display:flex; gap:8px; align-items:baseline; }
+.lint li::before{ content:""; flex:none; width:7px; height:7px; border-radius:50%; background:var(--warn); transform:translateY(-1px); }
+.lint li.ok{ color:var(--ok); }
+.lint li.ok::before{ background:var(--ok); }
+.lint li.err{ color:var(--warn); }
+.lint li.info{ color:var(--ink-2); }
+.lint li.info::before{ background:var(--ink-3); }
+.lint code{ font:500 13px var(--mono); background:var(--panel-2); padding:0 4px; border-radius:4px; }
+
+/* hourly guidance strip */
+.strip{ padding:14px 0 6px; }
+.strip h2{ margin:0 18px 2px; font:700 20px/1 var(--cond); }
+.strip .sub{ margin:4px 18px 10px; color:var(--ink-3); font-size:13px; }
+.gridwrap{ overflow-x:auto; }
+table.hr{ border-collapse:separate; border-spacing:0; font-size:13px; width:max-content; min-width:100%; }
+.hr th,.hr td{ border-bottom:1px solid var(--rule-2); border-right:1px solid var(--rule-2); padding:4px 6px; text-align:center; white-space:nowrap; }
+.hr th.rl{ position:sticky; left:0; z-index:2; background:var(--panel); text-align:left; font:600 13px var(--cond); color:var(--ink-2); padding:4px 12px 4px 18px; min-width:118px; border-right:1px solid var(--rule); }
+.hr thead th{ font:600 12.5px var(--cond); color:var(--ink-2); min-width:54px; }
+.hr thead th small{ display:block; color:var(--ink-3); font-weight:500; }
+.hr thead th.day{ border-left:2px solid var(--ink-3); }
+.hr td.day{ border-left:2px solid var(--ink-3); }
+.hr tr.groups td{ padding:3px 2px; font:600 11.5px var(--cond); }
+.hr .g{ display:block; border-radius:5px; padding:2px 4px; background:var(--panel-2); color:var(--ink-2); }
+.hr .g.init{ background:rgba(var(--p),.18); color:var(--ink); }
+.hr .g.becmg{ background:rgba(var(--p),.32); color:var(--ink); }
+.hr .g.tempo{ background:var(--edit-bg); color:var(--edit); }
+.hr td.c1{ background:var(--c1); } .hr td.c2{ background:var(--c2); } .hr td.c3{ background:var(--c3); color:#fff; } .hr td.c4{ background:var(--c4); color:#fff; } .hr td.c5{ background:var(--c5); color:#fff; }
+.hr td.mono{ font-family:var(--mono); font-size:12.5px; }
+.hr td.p{ font-weight:600; }
+
+/* settings + sources */
+details.cfg > summary{ list-style:none; cursor:pointer; padding:12px 16px; display:flex; gap:12px; align-items:center; font-weight:600; }
+details.cfg > summary::-webkit-details-marker{ display:none; }
+details.cfg > summary .chev{ color:var(--ink-3); transition:transform .15s; }
+details.cfg[open] > summary .chev{ transform:rotate(90deg); }
+details.cfg > summary .sum{ font-weight:400; color:var(--ink-2); font-size:13.5px; }
+.cfggrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:16px 26px; padding:4px 16px 18px; }
+.cfggrid h3{ margin:0 0 6px; font:600 13px var(--cond); color:var(--ink-3); letter-spacing:.3px; }
+.cfggrid label{ display:flex; justify-content:space-between; gap:10px; align-items:center; font-size:13.5px; padding:3px 0; }
+.cfggrid input{ width:110px; border:1px solid var(--rule); border-radius:6px; padding:3px 7px; background:var(--panel); font-family:var(--mono); font-size:13px; }
+.cfggrid input[type=checkbox]{ width:auto; }
+.srow{ display:flex; gap:8px; align-items:center; font-size:13.5px; padding:2px 0; }
+.srow .st{ font-size:12px; color:var(--ink-3); }
+.srow.na{ color:var(--ink-3); }
+.foot{ color:var(--ink-3); font-size:12.5px; max-width:100ch; }
+.foot p{ margin:4px 0; }
+.toast{ position:fixed; left:50%; bottom:calc(22px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%) translateY(20px); background:var(--ink); color:var(--panel); padding:10px 18px; border-radius:10px; font-weight:500; opacity:0; transition:all .2s; pointer-events:none; z-index:50; }
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+@media (max-width:760px){
+  .top{ grid-template-columns:1fr; }
+  .top,.statusline,main{ padding-left:14px; padding-right:14px; }
+  .banner{ margin-left:14px; margin-right:14px; }
+  textarea#taf{ font-size:14px; }
+}
+@media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
+</style>
+<script>
+/* color theme shared by all pages: auto (follow the system), light or dark */
+(function(){ var t; try { t = localStorage.getItem("erwx:theme"); } catch (e) {} if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); })();
+document.addEventListener("DOMContentLoaded", function(){
+  var cur = function(){ return document.documentElement.getAttribute("data-theme") || "auto"; };
+  var mark = function(){ document.querySelectorAll(".theme [data-th]").forEach(function(b){ b.setAttribute("aria-pressed", b.getAttribute("data-th") === cur()); }); };
+  document.querySelectorAll(".theme [data-th]").forEach(function(b){ b.addEventListener("click", function(){
+    var t = b.getAttribute("data-th");
+    if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t);
+    try { localStorage.setItem("erwx:theme", t); } catch (e) {}
+    mark(); window.dispatchEvent(new Event("themechange"));
+  }); });
+  mark();
+});
+</script>
+<style>.srcbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 10px}.srcbar .mut{color:var(--ink-3);font-size:12.5px}</style>
+<style>
+body:not([data-tab="cwa"]) .cwa-only, body:not([data-tab="mis"]) .mis-only{display:none}
+body[data-tab="cwa"] .taf-only, body[data-tab="mis"] .taf-only, body[data-tab="cwa"] #banner, body[data-tab="mis"] #banner{display:none !important}
+.tabbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:6px 0 8px}.tabbar .seg button{font-weight:600;padding:5px 16px}.tabbar .mut,.cwform .mut{color:var(--ink-3);font-size:12.5px}
+.cwform{display:flex;flex-direction:column;gap:8px;margin:6px 0 10px}.cw-row{display:flex;gap:10px 14px;align-items:flex-end;flex-wrap:wrap}
+.cw-row label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--ink-2)}.cw-row label.ck{flex-direction:row;align-items:center;gap:6px;padding-bottom:6px}
+.cw-row label.grow,.cw-row label:has(input.grow){flex:1 1 320px}.cw-row input.grow{width:100%;box-sizing:border-box}.cw-row input,.cw-row select,.cw-row textarea{font:inherit;font-size:13.5px;padding:5px 7px;border:1px solid var(--rule);border-radius:6px;background:var(--panel);color:var(--ink)}
+.cw-row textarea,#cwText,#misText{font-family:ui-monospace,Menlo,Consolas,monospace;width:100%;box-sizing:border-box}
+#cwText,#misText{font-size:15px;line-height:1.5;padding:10px 12px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);color:var(--ink);text-transform:uppercase}
+.cwlog{padding:0 16px 12px}.cwbtns{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.cwlog ul{list-style:none;padding:0;margin:0}.cwlog li{margin:0 0 10px}.cwlog pre{margin:4px 0 0;font-size:12.5px;white-space:pre-wrap;background:var(--panel-2);padding:6px 8px;border-radius:6px}
+</style>
+</head>
+<body>
+<nav class="pagenav" aria-label="Products"><a href="./" data-page="planning">Planning forecast</a><a href="taf.html" data-page="taf" aria-current="page">TAF, CWA and MIS</a><span class="navsp"></span><span class="seg theme" role="group" aria-label="Color theme"><button type="button" data-th="auto">Auto</button><button type="button" data-th="light">Light</button><button type="button" data-th="dark">Dark</button></span></nav>
+<header class="top">
+  <div class="tbrand"><img class="unitlogo" src="zjx-logo.png" alt="CWSU ZJX" onerror="this.remove()"><div>
+    <h1>ZJX aviation products</h1>
+    <div class="where taf-only" id="tafWhere"></div>
+  </div></div>
+  <div class="actions taf-only">
+    <button class="btn" id="regen">Regenerate from guidance</button>
+    <button class="btn" id="download">Download .txt</button>
+    <button class="btn primary" id="copy">Copy TAF</button><button class="btn" id="tafPublic" hidden title="A public copy for the products page">Public copy</button>
+  </div>
+</header>
+<div class="tabbar"><span class="seg" role="group" aria-label="Product"><button type="button" data-tab="taf" aria-pressed="true">TAF</button><button type="button" data-tab="cwa" aria-pressed="false">CWA</button><button type="button" data-tab="mis" aria-pressed="false">MIS</button></span><span class="mut">CWA and MIS formats follow NWSI 10-803. Drafts and the issuance log stay in this browser.</span></div>
+<div class="statusline stnline taf-only">
+  <span class="k">Station</span>
+  <span class="seg" id="stnSel" role="group" aria-label="TAF station"></span>
+  <span id="stnOther" hidden class="stnother"><label>ICAO <input id="cuIcao" maxlength="4" autocomplete="off" style="width:70px;text-transform:uppercase"></label><label>Lat <input id="cuLat" inputmode="decimal" style="width:82px" placeholder="auto"></label><label>Lon <input id="cuLon" inputmode="decimal" style="width:90px" placeholder="auto"></label><button class="btn" id="cuLoad" style="padding:4px 10px;font-size:13px">Load</button></span>
+  <span class="sp"></span>
+  <label>Valid period <select id="vlen"><option value="24">24 h</option><option value="30">30 h</option></select></label>
+</div>
+<div class="statusline taf-only">
+  <span class="live" id="live">Loading guidance</span>
+  <span class="seg" role="group" aria-label="TAF type"><button data-k="" aria-pressed="true">Routine</button><button data-k="AMD" aria-pressed="false">AMD</button><button data-k="COR" aria-pressed="false">COR</button></span>
+  <label>Issued <input id="issue" maxlength="7" placeholder="ddhhmmZ" autocomplete="off"></label>
+  <label>Valid from <input id="vstart" maxlength="4" placeholder="ddhh" autocomplete="off"></label>
+  <span><span class="k">to</span><span id="vend"></span></span>
+  <span class="sp"></span>
+  <button class="btn" id="refresh" style="padding:4px 10px;font-size:13px">Refresh guidance</button>
+</div>
+<div class="banner taf-only" id="banner"></div>
+<main class="taf-only">
+  <section class="panel taf" aria-label="TAF">
+    <div class="tafhead"><h2>TAF</h2><span class="note" id="tafnote">Generated from guidance. Edit freely; the checks below update as you type.</span></div>
+    <textarea id="taf" spellcheck="false" autocomplete="off" aria-label="TAF text"></textarea>
+    <ul class="lint" id="lint"></ul>
+  </section>
+
+  <section class="panel strip" aria-label="Hourly guidance">
+    <h2 id="stripTitle">Hourly guidance</h2>
+    <p class="sub" id="stripsub">Blend of the sources below. Shaded ceiling and visibility cells are below your category thresholds; the top row shows how the TAF groups line up.</p>
+    <div class="gridwrap" id="grid"></div>
+  </section>
+
+  <details class="panel cfg" id="cfg">
+    <summary><span class="chev">&#9656;</span>Generator settings <span class="sum">thresholds for change groups, TEMPO and weather</span></summary>
+    <div class="cfggrid" id="cfggrid"></div>
+  </details>
+
+  <details class="panel cfg" id="srcs">
+    <summary><span class="chev">&#9656;</span>Guidance sources <span class="sum" id="srcSum"></span></summary>
+    <div class="cfggrid" id="srcgrid"></div>
+  </details>
+
+  <div class="foot">
+    <p>The generator writes a starting point in NWS format (NWSI 10-813), not a finished product. It builds the initial group and FM groups where ceiling or visibility categories, weather, or wind change for at least the minimum period, TEMPO groups for thunderstorm and shower chances between your TEMPO and prevailing thresholds in the first hours, and PROB30 groups for those chances after that. Wind is 10 m. Visibility is the NWS reportable value at or below the guidance.</p>
+    <p>Not generated: non-convective low-level wind shear (WS) groups and AMD NOT SKED or other remarks. Add them by hand where they apply.</p>
+  </div>
+</main>
+<main class="cwa-only">
+  <section class="panel taf" aria-label="Center Weather Advisory">
+    <div class="tafhead"><h2>Center Weather Advisory</h2><span class="note">Valid up to 2 hours. Phenomenon numbers 1–6 and issuance numbers reset each local day.</span></div>
+    <div class="cwform" id="cwForm"></div>
+    <textarea id="cwText" spellcheck="false" autocomplete="off" aria-label="CWA text"></textarea>
+    <div class="cwbtns"><button class="btn primary" id="cwCopy" type="button">Copy CWA</button><button class="btn" id="cwDl" type="button">Download .txt</button><button class="btn" id="cwLogBtn" type="button" title="Record this CWA in today's log so the next number is right">Log as issued</button><button class="btn ghost" id="cwReset" type="button">Clear form</button></div>
+    <ul class="lint" id="cwLint"></ul>
+  </section>
+  <details class="panel cfg" open><summary><span class="chev">&#9656;</span>Today's log <span class="sum">this browser only</span></summary><div class="cwlog" id="cwLog"></div></details>
+</main>
+<main class="mis-only">
+  <section class="panel taf" aria-label="Meteorological Impact Statement">
+    <div class="tafhead"><h2>Meteorological Impact Statement</h2><span class="note">Valid up to 48 hours, at most four lines of text through FAA systems. Numbers reset each local day.</span></div>
+    <div class="cwform" id="misForm"></div>
+    <textarea id="misText" spellcheck="false" autocomplete="off" aria-label="MIS text"></textarea>
+    <div class="cwbtns"><button class="btn primary" id="misCopy" type="button">Copy MIS</button><button class="btn" id="misDl" type="button">Download .txt</button><button class="btn" id="misLogBtn" type="button">Log as issued</button><button class="btn ghost" id="misReset" type="button">Clear form</button></div>
+    <ul class="lint" id="misLint"></ul>
+  </section>
+  <details class="panel cfg" open><summary><span class="chev">&#9656;</span>Today's log <span class="sum">this browser only</span></summary><div class="cwlog" id="misLog"></div></details>
+</main>
+<div class="toast" id="toast"></div>
+<script src="cwa-mis.js?v=cd7a80f017"></script>
+<script src="guidance.js?v=de60eeef03"></script>
+<script>
+"use strict";
+/* ============================================================
+   TAF generator for the ZJX core airports or any ICAO (NWS format, NWSI 10-813)
+   Uses the shared guidance engine in guidance.js.
+   ============================================================ */
+/* TAF sites: the ZJX core airports (SITES in guidance.js) plus any ICAO */
+const TAF_SITES = SITES.map(s => ({ id:s.id, name:s.name, stn:s.stn, lat:s.lat, lon:s.lon, rwy:s.rwy }));
+let SITE = null, SI = 0;
+const $ = id => document.getElementById(id);
+const LSK = "taffx:v1";
+const LSD = () => `taffx:v1:draft:${SITE ? SITE.stn : "KMCO"}`;
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } },
+};
+const DEMO = /[?&]demo=1\b/.test(location.search) || !!(typeof window !== "undefined" && window.FORCE_DEMO);
+const DEF = {
+  tsPrev:50, tsTempo:20, popPrev:60, popTempo:30, vcsh:15, probAfter:9,
+  cig:"3000 2000 1000 500 200", vis:"6 5 3 1 0.5",
+  dirChg:30, spdChg:10, gustMin:10, minSeg:3, maxBecmg:7,
+  tempoTsVis:3, tempoTsBase:3000, tempoShVis:5, tempoShBase:2500,
+};
+const CFG_UI = [
+  ["Thunder (probability, %)", [["tsPrev","Prevailing TS at or above"],["tsTempo","TEMPO/PROB30 TS at or above"]]],
+  ["Precipitation (1 h probability, %)", [["popPrev","Prevailing rain at or above"],["popTempo","TEMPO/PROB30 showers at or above"],["vcsh","VCSH at or above"]]],
+  ["Category thresholds", [["cig","Ceiling (ft)"],["vis","Visibility (SM)"]]],
+  ["Change groups", [["dirChg","Wind direction change (°)"],["spdChg","Wind speed change (kt)"],["gustMin","Report gusts at (kt over mean)"],["minSeg","Minimum hours for an FM group"],["maxBecmg","Most FM groups"],["probAfter","PROB30 instead of TEMPO after (h)"]]],
+  ["TEMPO / PROB30 content", [["tempoTsVis","TS visibility (SM)"],["tempoTsBase","TS cloud base (ft)"],["tempoShVis","Shower visibility (SM)"],["tempoShBase","Shower cloud base (ft)"]]],
+];
+const T = Object.assign({ enabled:{}, weight:{}, kind:"" }, store.get(LSK, {}));
+T.cfg = Object.assign({ ...DEF }, T.cfg || {});
+const saveT = () => store.set(LSK, T);
+const S = { TL:null, G:null, status:{}, loading:true, fetchedAt:null, hours:[], states:[], plan:null, gen:"", start:null, issue:null };
+
+/* NWS TAF visibility values (SM); 7 stands for P6SM */
+const NWS_VIS = [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 5, 6];
+const smVis = m => { if (m == null) return 7; const v = m/1609.34; if (v > 6) return 7; let r = 0; for (const x of NWS_VIS) if (x <= v + 1e-6) r = x; return r; };
+const visText = v => { if (v >= 7 || v > 6) return "P6SM"; const w = Math.floor(v), f = Math.round((v - w)*4); const fr = f === 1 ? "1/4" : f === 2 ? "1/2" : f === 3 ? "3/4" : ""; return (w && fr ? `${w} ${fr}` : w ? String(w) : fr || "0") + "SM"; };
+const v4 = v => String(v).padStart(4, "0");
+const nums = s => String(s).split(/[\s,]+/).map(Number).filter(n => isFinite(n) && n > 0).sort((a, b) => b - a);
+
+/* ---------- time ---------- */
+const p2 = n => String(n).padStart(2, "0");
+function ddhh(ms, end){ const d = new Date(ms); if (end && d.getUTCHours() === 0){ const q = new Date(ms - H); return p2(q.getUTCDate()) + "24"; } return p2(d.getUTCDate()) + p2(d.getUTCHours()); }
+function ddhhmm(ms){ const d = new Date(ms); return p2(d.getUTCDate()) + p2(d.getUTCHours()) + p2(d.getUTCMinutes()); }
+/* ddhh near a reference time -> ms (handles month rollover) */
+function fromDdhh(s, ref){
+  const m = String(s).match(/^(\d{2})(\d{2})$/); if (!m) return null;
+  const dd = +m[1], hh = +m[2]; const r = new Date(ref);
+  let best = null;
+  for (const mo of [-1, 0, 1]){ const t = Date.UTC(r.getUTCFullYear(), r.getUTCMonth() + mo, dd, hh); if (new Date(t).getUTCDate() !== dd && hh !== 24) continue; if (best == null || Math.abs(t - ref) < Math.abs(best - ref)) best = t; }
+  return best;
+}
+
+/* ============================================================
+   Hourly blend at the selected station
+   ============================================================ */
+const Wt = s => T.weight[s.def.id] ?? s.def.w ?? 1;
+const onSources = () => S.G ? S.G.src.filter(s => T.enabled[s.def.id] !== false && Wt(s) > 0) : [];
+function wmed(pairs){
+  const p = pairs.filter(x => x[0] != null && isFinite(x[0])).sort((a, b) => a[0] - b[0]); if (!p.length) return null;
+  const tot = p.reduce((a, x) => a + x[1], 0); let c = 0; for (const x of p){ c += x[1]; if (c >= tot/2) return x[0]; } return p[p.length - 1][0];
+}
+const mean = a => a.length ? a.reduce((x, y) => x + y, 0)/a.length : null;
+const median = a => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y); const k = b.length >> 1; return b.length % 2 ? b[k] : (b[k - 1] + b[k])/2; };
+function blendHour(t){
+  const i = S.TL.idx(t), on = onSources();
+  /* the NBM family splits one weight for the shared elements; ceiling, visibility, cloud base and thunder (text only) keep full weight */
+  const famN = Math.max(1, on.filter(s => NBM_FAMILY.has(s.def.id) && s.members.length && i >= 0 && i < S.TL.n && s.members[0].t[i] != null).length);
+  const acc = {}, push = (k, v, w) => { if (v != null && isFinite(v)) (acc[k] = acc[k] || []).push([v, w]); };
+  let U = 0, V = 0, UW = 0, R = 0, RN = 0;
+  for (const s of on){
+    const wFull = Wt(s), w = NBM_FAMILY.has(s.def.id) ? wFull/famN : wFull, ms = s.members;
+    if (ms.length && i >= 0 && i < S.TL.n){
+      for (const k of ["t","td","s10","g10","cl","cm","ch","sky","slp"]) push(k, mean(ms.map(m => m[k] ? m[k][i] : null).filter(v => v != null)), w);
+      for (const k of ["vis","cig","lcb"]) push(k, median(ms.map(m => m[k] ? m[k][i] : null).filter(v => v != null)), wFull);
+      let u = 0, v = 0, n = 0;
+      for (const m of ms){ const d = m.d10[i], sp = m.s10[i]; if (d == null || sp == null) continue; u += -Math.sin(d*Math.PI/180)*Math.max(.5, sp); v += -Math.cos(d*Math.PI/180)*Math.max(.5, sp); n++; }
+      if (n){ U += u/n*w; V += v/n*w; UW += w; const L = Math.hypot(u/n, v/n); const S2 = mean(ms.map(m => m.s10[i]).filter(x => x != null)); if (S2) { R += Math.min(1, L/Math.max(.5, S2)); RN++; } }
+      const j = S.TL.idx(t + H);
+      const q = ms.map(m => m.pr && j < S.TL.n && (!m.pacc || !m.pacc[j] || m.pacc[j] === 1) ? m.pr[j] : null).filter(v => v != null);
+      push("qpf", mean(q), w);
+    }
+    const pp = S.G.srcWin(s, "pop", t, t + H); if (pp != null) push("pop", pp, w);
+    const lt = S.G.srcWin(s, "tst", t, t + H); if (lt != null) push("ltg", lt, wFull);
+  }
+  const b = {};
+  for (const k of ["t","td","s10","g10","cl","cm","ch","sky","slp","qpf","pop","ltg"]) b[k] = acc[k] ? wmean(acc[k]) : null;
+  for (const k of ["vis","cig","lcb"]) b[k] = acc[k] ? wmed(acc[k]) : null;
+  b.d10 = UW ? (Math.atan2(-U, -V)*180/Math.PI + 360) % 360 : null;
+  b.steady = RN ? R/RN : 1;    /* 1 = sources agree on direction, near 0 = variable */
+  b.n = on.length;
+  return b;
+}
+
+/* ============================================================
+   Hour -> TAF elements
+   ============================================================ */
+const RANK = { FEW:1, SCT:2, BKN:3, OVC:4 };
+const covCat = p => p == null || p < 6.25 ? null : p < 31.25 ? "FEW" : p < 56.25 ? "SCT" : p < 93.75 ? "BKN" : "OVC";
+const roundH = h => h < 5000 ? Math.max(100, Math.round(h/100)*100) : h < 10000 ? Math.round(h/500)*500 : Math.round(h/1000)*1000;
+const hhh = h => String(Math.round(h/100)).padStart(3, "0");
+function cloudLayers(b){
+  const lowB = b.lcb != null && b.lcb < 12000 ? b.lcb : b.cig != null && b.cig < 6500 ? b.cig : 3000;
+  let layers = [];
+  if (b.cl != null || b.cm != null || b.ch != null){
+    const own = [b.cl ?? 0, b.cm ?? 0, b.ch ?? 0];
+    const cum = [own[0], Math.max(own[0], own[1]), Math.max(own[0], own[1], own[2])];
+    const hts = [lowB, Math.max(lowB + 2000, 10000), 25000];
+    for (let j = 0; j < 3; j++){
+      let a = covCat(cum[j]); if (!a || own[j] < 6.25) continue;
+      const last = layers[layers.length - 1];
+      if (last && last.amt === "OVC") break;
+      if (last && RANK[a] < RANK[last.amt]) a = last.amt;
+      layers.push({ amt:a, h:hts[j] });
+    }
+  } else if (b.sky != null){ const a = covCat(b.sky); if (a) layers.push({ amt:a, h:lowB }); }
+  if (b.cig != null && b.cig < 12000){
+    const first = layers.find(l => RANK[l.amt] >= 3);
+    if (!first || first.h > b.cig + 200){
+      const below = layers.filter(l => l.h < b.cig - 200 && RANK[l.amt] < 3);
+      const above = layers.filter(l => l.h > b.cig + 200).map(l => ({ amt: RANK[l.amt] < 3 ? "BKN" : l.amt, h:l.h }));
+      layers = [...below, { amt:"BKN", h:b.cig }, ...above];
+    }
+  }
+  layers = layers.map(l => ({ amt:l.amt, h:roundH(l.h) })).sort((a, b) => a.h - b.h).filter((l, k, arr) => !k || l.h > arr[k - 1].h);
+  for (let k = 1; k < layers.length; k++) if (RANK[layers[k].amt] < RANK[layers[k - 1].amt]) layers[k].amt = layers[k - 1].amt;
+  const ov = layers.findIndex(l => l.amt === "OVC"); if (ov >= 0) layers = layers.slice(0, ov + 1);
+  layers = layers.slice(0, 3);
+  const c = layers.find(l => RANK[l.amt] >= 3);
+  return { layers, ceil: c ? c.h : null };
+}
+function hourState(t, b){
+  const c = T.cfg, cig = nums(c.cig), visT = nums(c.vis);
+  const vis = smVis(b.vis), cl = cloudLayers(b);
+  const ltg = b.ltg != null ? b.ltg*100 : null, pop = b.pop != null ? b.pop*100 : null;
+  const q = b.qpf, inten = q == null || q < 0.10 ? "-" : q < 0.30 ? "" : "+";
+  let prev = "", tempo = "";
+  if (ltg != null && ltg >= c.tsPrev) prev = inten + "TSRA";
+  else if (pop != null && pop >= c.popPrev) prev = inten + ((ltg ?? 0) >= 10 || (b.sky ?? 100) < 87.5 ? "SHRA" : "RA");
+  if (ltg != null && ltg >= c.tsTempo && ltg < c.tsPrev) tempo = "TS";
+  else if (!prev && pop != null && pop >= c.popTempo && pop < c.popPrev) tempo = "SH";
+  const vc = !prev && pop != null && pop >= c.vcsh && !tempo ? "VCSH" : "";
+  let ob = "";
+  if (vis <= 6 && (!prev || vis < 3)) ob = vis < 0.625 ? "FG" : (b.t != null && b.td != null && b.t - b.td <= 5 ? "BR" : "HZ");
+  const wx = [prev, ob, vc].filter(Boolean).join(" ");
+  /* wind */
+  const s = b.s10 == null ? null : Math.round(b.s10), gRaw = b.g10 == null ? null : Math.round(b.g10);
+  const gust = s != null && gRaw != null && gRaw - s >= c.gustMin ? gRaw : null;
+  let wind = "/////KT";
+  if (s != null){
+    if (s < 2) wind = "00000KT";
+    else if (s <= 6 && b.steady < 0.5) wind = `VRB${p2(s)}KT`;
+    else wind = `${String(Math.round((b.d10 ?? 0)/10)*10 % 360 || 360).padStart(3, "0")}${p2(s)}${gust ? "G" + p2(gust) : ""}KT`;
+  }
+  const cigCat = cl.ceil == null ? 0 : cig.filter(x => cl.ceil < x).length;
+  const visCat = visT.filter(x => vis < x).length;
+  const wxBase = /TS/.test(prev) ? "TS" : /RA/.test(prev) ? "RA" : "";
+  return { t, b, vis, wx, prev, tempo, ob, vc, wind, s, gust, d:b.d10, ...cl, cigCat, visCat, wxBase, qnh: b.slp == null ? null : Math.floor(b.slp*0.0295300*100)/100, tc: b.t == null ? null : (b.t - 32)*5/9 };
+}
+function windChanged(a, b){
+  const c = T.cfg; if (a.s == null || b.s == null) return false;
+  if (Math.abs(a.s - b.s) >= c.spdChg) return true;
+  if (!!a.gust !== !!b.gust) return true;
+  if (Math.max(a.s, b.s) >= 10 && a.d != null && b.d != null){ const dd = Math.abs(((a.d - b.d + 540) % 360) - 180); if (dd >= c.dirChg) return true; }
+  return false;
+}
+const changed = (a, b) => a.cigCat !== b.cigCat || a.visCat !== b.visCat || a.wxBase !== b.wxBase || windChanged(a, b);
+
+/* ============================================================
+   Build the TAF
+   ============================================================ */
+function plan(states){
+  const n = states.length; let minSeg = Math.max(1, +T.cfg.minSeg || 3), segs;
+  for (let tries = 0; tries < 6; tries++, minSeg++){
+    segs = [0]; let ref = states[0];
+    for (let i = 1; i < n; i++){
+      if (!changed(ref, states[i])) continue;
+      let k = i; while (k < n && !changed(states[i], states[k])) k++;
+      if (k - i >= minSeg || (k === n && n - i >= Math.min(2, minSeg))){ segs.push(i); ref = states[i]; i = k - 1; }
+    }
+    if (segs.length - 1 <= (+T.cfg.maxBecmg || 7)) break;
+  }
+  /* a first group shorter than the minimum just starts with the next conditions */
+  let rep0 = 0;
+  if (segs.length > 1 && segs[1] < minSeg){ rep0 = segs[1]; segs.splice(1, 1); }
+  const seg = segs.map((st, j) => ({ a:st, b: j + 1 < segs.length ? segs[j + 1] : n, rep: j ? st : rep0 }));
+  /* TEMPO runs, at most 4 h each */
+  const segStart = new Set(seg.slice(1).map(x => x.a));
+  const tempo = []; let i = 0;
+  while (i < n){
+    if (!states[i].tempo){ i++; continue; }
+    /* a TEMPO or PROB30 never crosses an FM group (NWSI 10-813) */
+    let k = i; while (k < n && states[k].tempo && k - i < 4 && (k === i || !segStart.has(k))) k++;
+    const run = states.slice(i, k);
+    tempo.push({ a:i, b:k, kind: run.some(s => s.tempo === "TS") ? "TS" : "SH" });
+    i = k;
+  }
+  return { seg, tempo };
+}
+function cloudText(layers, cb){
+  if (!layers.length) return cb ? `SCT${hhh(T.cfg.tempoTsBase)}CB` : "SKC";
+  const L = layers.map(l => l.amt + hhh(l.h));
+  if (cb){ const k = layers.findIndex(l => RANK[l.amt] >= 2); L[k >= 0 ? k : 0] += "CB"; }
+  return L.join(" ");
+}
+function groupText(st){
+  const ts = /TS/.test(st.prev);
+  return [st.wind, visText(st.vis), st.wx, cloudText(st.layers, ts)].filter(Boolean).join(" ");
+}
+function tempoText(tp, states, seg){
+  const c = T.cfg, base = states[seg.rep];
+  const low = base.layers.length ? base.layers[0].h : 99999;
+  if (tp.kind === "TS"){
+    const vis = Math.min(base.vis, +c.tempoTsVis);
+    return `${visText(vis)} TSRA BKN${hhh(roundH(Math.min(low, c.tempoTsBase)))}CB`;
+  }
+  const vis = Math.min(base.vis, +c.tempoShVis);
+  return `${vis < base.vis ? visText(vis) + " " : ""}SHRA BKN${hhh(roundH(Math.min(low, c.tempoShBase)))}`;
+}
+function buildTAF(){
+  const start = S.start, n = T.vlen || 30;
+  S.hours = Array.from({ length:n }, (_, k) => start + k*H);
+  S.states = S.hours.map(t => hourState(t, blendHour(t)));
+  const P = plan(S.states); S.plan = P;
+  /* NWS layout: TAF (AMD/COR) on its own line, then the station line, change groups indented */
+  const lines = [];
+  lines.push({ t:start, s:`${SITE.stn} ${ddhhmm(S.issue)}Z ${ddhh(start)}/${ddhh(start + n*H, true)} ${groupText(S.states[P.seg[0].rep])}` });
+  P.seg.slice(1).forEach(sg => { const t = S.hours[sg.a]; lines.push({ t, s:`     FM${ddhh(t)}00 ${groupText(S.states[sg.rep])}` }); });
+  const after = +T.cfg.probAfter || 9;
+  P.tempo.forEach(tp => {
+    const sg = P.seg.filter(x => x.a <= tp.a).pop();
+    /* NWSI 10-813: no PROB30 in the first 9 hours; PROB30 up to 6 h, TEMPO up to 4 h */
+    const prob = tp.a >= after, b = prob ? Math.min(tp.b, tp.a + 6) : tp.b;
+    lines.push({ t:S.hours[tp.a] + 0.5, s:`     ${prob ? "PROB30" : "TEMPO"} ${ddhh(S.hours[tp.a])}/${ddhh(S.hours[tp.a] + (b - tp.a)*H, true)} ${tempoText(tp, S.states, sg)}` });
+  });
+  lines.sort((a, b) => a.t - b.t);
+  return `TAF${T.kind ? " " + T.kind : ""}\n` + lines.map(l => l.s).join("\n");
+}
+
+/* ============================================================
+   Format checks
+   ============================================================ */
+const WX_RE = /^(\+|-|VC)?(MI|PR|BC|DR|BL|SH|TS|FZ)?(DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)*$/;
+const VIS_OK = new Set(["0SM","1/4SM","1/2SM","3/4SM","1SM","1 1/2SM","2SM","3SM","4SM","5SM","6SM","P6SM"]);
+function lint(txt){
+  const out = [], add = (lvl, msg) => out.push({ lvl, msg });
+  /* "1 1/2SM" is one value */
+  const tok = txt.replace(/=/g, " ").replace(/\b(\d) (\d\/\dSM)\b/g, "$1_$2").trim().split(/\s+/).filter(Boolean).map(t => t.replace("_", " "));
+  if (!tok.length){ add("err", "The TAF is empty."); return out; }
+  let p = 0;
+  if (tok[p] !== "TAF"){ add("err", "Start with <code>TAF</code>."); return out; }
+  p++; const kind = tok[p] === "AMD" || tok[p] === "COR" ? tok[p++] : "";
+  if (tok[p] !== SITE.stn) add("err", `Station should be <code>${SITE.stn}</code>, found <code>${tok[p] || ""}</code>.`);
+  p++;
+  if (!/^\d{6}Z$/.test(tok[p] || "")) add("err", "Issue time should be <code>ddhhmmZ</code>.");
+  p++;
+  const vm = (tok[p] || "").match(/^(\d{4})\/(\d{4})$/);
+  let vs = null, ve = null;
+  if (!vm) add("err", "Valid period should be <code>ddhh/ddhh</code>.");
+  else {
+    vs = fromDdhh(vm[1], S.start || Date.now()); ve = fromDdhh(vm[2], vs + 30*H);
+    if (vs != null && ve != null){ const hrs = Math.round((ve - vs)/H); if (!kind && hrs !== (T.vlen || 30)) add("warn", `Valid period is ${hrs} hours; a routine ${SITE.stn} TAF here is ${T.vlen || 30}.`); }
+  }
+  p++;
+  const groups = [{ kind:"INIT", tokens:[] }];
+  for (; p < tok.length; p++){
+    const fm = tok[p].match(/^FM(\d{6})$/);
+    if (fm){ groups.push({ kind:"FM", time:fm[1], tokens:[] }); continue; }
+    if (/^FM/.test(tok[p])){ add("err", `<code>${tok[p]}</code>: FM groups are <code>FMddhhmm</code>.`); groups.push({ kind:"FM", time:"", tokens:[] }); continue; }
+    if (tok[p] === "TEMPO" || /^PROB\d{2}$/.test(tok[p])){ groups.push({ kind:tok[p], time:tok[p + 1], tokens:[] }); p++; continue; }
+    if (tok[p] === "BECMG"){ add("warn", "NWS TAFs use FM groups; BECMG is rarely used (NWSI 10-813)."); groups.push({ kind:"BECMG", time:tok[p + 1], tokens:[] }); p++; continue; }
+    groups[groups.length - 1].tokens.push(tok[p]);
+  }
+  let lastFM = vs;
+  groups.forEach(g => {
+    const label = g.kind === "INIT" ? "Initial group" : `${g.kind === "FM" ? "FM" + (g.time || "") : g.kind + " " + (g.time || "")}`;
+    const full = g.kind === "INIT" || g.kind === "FM";
+    if (g.kind === "FM" && g.time){
+      const a = fromDdhh(g.time.slice(0, 4), vs ?? Date.now()); const t = a == null ? null : a + (+g.time.slice(4))*60e3;
+      if (t == null) add("err", `${label}: bad time.`);
+      else {
+        if (vs != null && (t <= vs || (ve != null && t >= ve))) add("err", `${label} falls outside the valid period.`);
+        if (lastFM != null && t <= lastFM) add("warn", `${label} isn't after the previous FM group.`); lastFM = t;
+      }
+    }
+    if (/^PROB/.test(g.kind) && g.kind !== "PROB30") add("err", `${g.kind}: NWS TAFs use only <code>PROB30</code>.`);
+    if (g.kind === "TEMPO" || /^PROB/.test(g.kind) || g.kind === "BECMG"){
+      const m = (g.time || "").match(/^(\d{4})\/(\d{4})$/);
+      if (!m) add("err", `${g.kind} needs a <code>ddhh/ddhh</code> time.`);
+      else if (vs != null){
+        const a = fromDdhh(m[1], vs), b = fromDdhh(m[2], a ?? vs);
+        if (a == null || b == null || b <= a) add("err", `${label}: end time must be after start.`);
+        else {
+          const hrs = (b - a)/H;
+          if (g.kind === "TEMPO" && hrs > 4) add("warn", `${label}: TEMPO periods should be 4 hours or less.`);
+          if (/^PROB/.test(g.kind) && hrs > 6) add("warn", `${label}: PROB30 periods should be 6 hours or less.`);
+          if (/^PROB/.test(g.kind) && a < vs + 9*H) add("err", `${label}: PROB30 isn't used in the first 9 hours of the TAF.`);
+          if (a < vs || (ve != null && b > ve)) add("err", `${label} falls outside the valid period.`);
+        }
+      }
+    }
+    const tks = g.tokens;
+    const wind = tks.find(t => /KT$/.test(t) && !/^WS/.test(t));
+    if (full && !wind) add("err", `${label} needs a wind (<code>dddffKT</code>).`);
+    if (wind && !/^((\d{3}|VRB)\d{2,3}(G\d{2,3})?|00000)KT$/.test(wind)) add("err", `${label}: wind <code>${wind}</code> isn't in <code>dddff(Ggg)KT</code> form.`);
+    if (wind){ const m = wind.match(/^(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?KT$/); if (m && m[1] !== "VRB" && (+m[1] % 10 !== 0 || +m[1] > 360)) add("warn", `${label}: wind direction should be to the nearest 10 degrees.`); if (m && m[1] === "VRB" && +m[2] > 6) add("warn", `${label}: VRB is for speeds of 6 kt or less (or variable winds with thunderstorms).`); if (m && m[3] && +m[3] - +m[2] < 10) add("warn", `${label}: gust is less than 10 kt above the mean.`); }
+    const visT = tks.find(t => /SM$/.test(t));
+    if (full && !visT) add("err", `${label} needs a visibility (<code>P6SM</code>, <code>3SM</code>, <code>1/2SM</code>…).`);
+    if (visT && !VIS_OK.has(visT)) add("warn", `${label}: <code>${visT}</code> isn't an NWS TAF visibility value.`);
+    const visV = visT ? (visT === "P6SM" ? 7 : visT.replace("SM", "").split(" ").reduce((a, x) => a + (x.includes("/") ? +x.split("/")[0]/+x.split("/")[1] : +x), 0)) : null;
+    const wxs = tks.filter(t => !/KT$|SM$|^(FEW|SCT|BKN|OVC|VV)\d{3}|^SKC$|^NSW$|^WS\d{3}\//.test(t));
+    wxs.forEach(t => { if (!WX_RE.test(t)) add("warn", `${label}: <code>${t}</code> isn't a recognised weather code.`); });
+    if (visV != null && visV <= 6 && !wxs.length) add("warn", `${label}: visibility of 6 SM or less needs a weather or obscuration.`);
+    if (visV != null && visV > 6 && wxs.some(t => /^(BR|HZ|FU)$/.test(t))) add("warn", `${label}: BR, HZ and FU need visibility of 6 SM or less.`);
+    if (wxs.some(t => /^FG$/.test(t)) && visV != null && visV >= 0.625) add("warn", `${label}: FG needs visibility below 5/8 SM (use BR).`);
+    if (wxs.some(t => /TS/.test(t) && !/^VCTS$/.test(t)) && !tks.some(t => /CB$/.test(t))) add("warn", `${label}: thunderstorms forecast without a CB layer.`);
+    const cl = tks.filter(t => /^(FEW|SCT|BKN|OVC|VV)\d{3}/.test(t));
+    if (full && !cl.length && !tks.includes("SKC")) add("err", `${label} needs clouds or <code>SKC</code>.`);
+    for (let k = 1; k < cl.length; k++){ const a = cl[k - 1].slice(0, 3), b = cl[k].slice(0, 3); if (+cl[k].slice(3, 6) <= +cl[k - 1].slice(3, 6)) add("warn", `${label}: cloud layers should go from lowest to highest.`); if (RANK[b] < RANK[a]) add("warn", `${label}: <code>${cl[k]}</code> is less than the layer below it (summation).`); }
+    if (tks.some(t => /^QNH|^T[XN]M?\d/.test(t))) add("warn", `${label}: QNH and TX/TN groups aren't used in NWS TAFs.`);
+  });
+  /* TEMPO and PROB30 shouldn't straddle an FM group */
+  if (vs != null){
+    const fms = groups.filter(g => g.kind === "FM" && /^\d{6}$/.test(g.time || "")).map(g => { const t = fromDdhh(g.time.slice(0, 4), vs); return t == null ? null : t + (+g.time.slice(4))*60e3; }).filter(t => t != null);
+    groups.filter(g => g.kind === "TEMPO" || /^PROB/.test(g.kind)).forEach(g => { const m = (g.time || "").match(/^(\d{4})\/(\d{4})$/); if (!m) return; const a2 = fromDdhh(m[1], vs), b2 = fromDdhh(m[2], a2 ?? vs); if (a2 != null && b2 != null && fms.some(t => t > a2 && t < b2)) add("warn", `${g.kind} ${g.time} crosses an FM group; end it at the FM time and repeat it after if needed.`); });
+  }
+  if (!out.length) add("ok", "No format problems found.");
+  return out;
+}
+
+/* ============================================================
+   UI
+   ============================================================ */
+function fitTaf(){ const ta = $("taf"); ta.rows = Math.max(6, ta.value.split("\n").length + 1); }
+/* consistency with the planning forecast: thunder in the TAF against the planning lightning chance at the
+   nearest planning point (from this browser's planning forecast, saved in the last 48 hours) */
+function tafCross(txt){
+  let rec = null; try { rec = JSON.parse(localStorage.getItem("erwx:for:v1") || "null"); } catch (e) { rec = null; }
+  if (!rec || rec.v !== 1 || Date.now() - rec.saved > 48*H || !SITE) return [];
+  let near = null; for (const [id, p] of Object.entries(rec.sites || {})){ const d = kmBetween(SITE.lat, SITE.lon, p.lat, p.lon); if (!near || d < near.d) near = { p, d }; }
+  if (!near || near.d > 65) return [];
+  const lines = String(txt || "").toUpperCase().replace(/^\s*TAF( AMD| COR)?\s*\n/, "TAF$1 ").split(/\n/).map(x => x.trim()).filter(Boolean); if (!lines.length) return [];
+  const now = new Date(), when = (dd, hh) => { let t = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), +dd, +hh); if (+dd < now.getUTCDate() - 15) t = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, +dd, +hh); return t; };
+  const vm = lines[0].match(/\b(\d{2})(\d{2})\/(\d{2})(\d{2})\b/); if (!vm) return [];
+  const A = when(vm[1], vm[2]), B = when(vm[3], vm[4]) + (vm[4] === "24" ? 0 : 0); if (!(B > A)) return [];
+  const n = Math.round((B - A)/H), prev = new Array(n).fill(false), tempo = new Array(n).fill(false);
+  const hasTS = s => /\b(\+|-|VC)?TS[A-Z]*\b/.test(s);
+  const setFrom = (t, v) => { for (let j = Math.max(0, Math.round((t - A)/H)); j < n; j++) prev[j] = v; };
+  setFrom(A, hasTS(lines[0].replace(/^TAF\s+(AMD\s+|COR\s+)?\w{4}\s+\d{6}Z\s+\d{4}\/\d{4}/, "")));
+  for (const ln of lines.slice(1)){
+    let m;
+    if ((m = ln.match(/^FM(\d{2})(\d{2})(\d{2})\b/))) setFrom(when(m[1], m[2]), hasTS(ln.slice(8)));
+    else if ((m = ln.match(/^BECMG\s+(\d{2})(\d{2})\/(\d{2})(\d{2})/))) setFrom(when(m[3], m[4]), hasTS(ln.slice(m[0].length)));
+    else if ((m = ln.match(/^(TEMPO|PROB\d{2})\s+(\d{2})(\d{2})\/(\d{2})(\d{2})/))){ const a = when(m[2], m[3]), b = when(m[4], m[5]); if (hasTS(ln.slice(m[0].length))) for (let j = Math.max(0, Math.round((a - A)/H)); j < Math.min(n, Math.round((b - A)/H)); j++) tempo[j] = true; }
+  }
+  const lt = j => { const k = Math.round((A + j*H - rec.t0)/H); return k >= 0 && k < rec.n ? near.p.v.lt[k] : null; };
+  const out = [], hz = t => new Date(t).toISOString().slice(11, 13) + "Z";
+  const group = (test, msg) => { let i0 = null; for (let j = 0; j <= n; j++){ const hit = j < n && test(j); if (hit && i0 == null) i0 = j; if (!hit && i0 != null){ const v = []; for (let k = i0; k < j; k++) if (lt(k) != null) v.push(lt(k)); out.push({ lvl:"info", msg: msg(hz(A + i0*H), hz(A + j*H), v.length ? Math.round(Math.max(...v)) : null) }); i0 = null; } } };
+  group(j => prev[j] && lt(j) != null && lt(j) < 20, (a, b, v) => `Planning forecast (${near.p.name}): prevailing thunder ${a}–${b}, but the planning lightning chance is only up to ${v}%.`);
+  group(j => !prev[j] && tempo[j] && lt(j) != null && lt(j) < 10, (a, b, v) => `Planning forecast (${near.p.name}): TEMPO thunder ${a}–${b}, but the planning lightning chance is only up to ${v}%.`);
+  group(j => !prev[j] && !tempo[j] && lt(j) != null && lt(j) >= 50, (a, b, v) => `Planning forecast (${near.p.name}): lightning chance up to ${v}% ${a}–${b}, but the TAF has no thunder then.`);
+  return out;
+}
+function renderLint(){ fitTaf(); $("lint").innerHTML = [...lint($("taf").value), ...tafCross($("taf").value)].map(x => `<li class="${x.lvl === "ok" ? "ok" : x.lvl === "err" ? "err" : x.lvl === "info" ? "info" : ""}">${x.msg}</li>`).join(""); }
+function edited(){ return $("taf").value.trim() !== S.gen.trim(); }
+function renderNote(){ const n = $("tafnote"); if (edited()){ n.textContent = "Edited by hand. Regenerate to start over from guidance."; n.classList.add("edited"); } else { n.textContent = "Generated from guidance. Edit freely; the checks below update as you type."; n.classList.remove("edited"); } }
+function saveDraft(){ store.set(LSD(), { text:$("taf").value, gen:S.gen, start:S.start, issue:S.issue, kind:T.kind, saved:Date.now() }); }
+function generate(force){
+  if (!S.G) return;
+  if (!force && edited() && !confirm("Replace your edited TAF with a fresh one from guidance?")) return;
+  S.gen = buildTAF(); $("taf").value = S.gen; saveDraft(); renderLint(); renderNote(); renderGrid();
+}
+function renderGrid(){
+  if (!S.states.length){ $("grid").innerHTML = ""; return; }
+  const st = S.states, P = S.plan, n = st.length;
+  const segOf = i => P.seg.findIndex(s => s.a <= i && i < s.b);
+  const dayB = i => i > 0 && new Date(st[i].t).getUTCDate() !== new Date(st[i - 1].t).getUTCDate();
+  let h = `<table class="hr"><thead><tr><th class="rl">Hour (UTC)</th>${st.map((s, i) => `<th class="${dayB(i) ? "day" : ""}">${p2(new Date(s.t).getUTCHours())}Z<small>${p2(lp(s.t).h)}L</small></th>`).join("")}</tr></thead><tbody>`;
+  h += `<tr class="groups"><th class="rl">Prevailing</th>`;
+  P.seg.forEach((sg, j) => { h += `<td colspan="${sg.b - sg.a}" class="${dayB(sg.a) ? "day" : ""}"><span class="g ${j ? "becmg" : "init"}">${j ? "FM" + ddhh(st[sg.a].t) + "00" : "Initial"}</span></td>`; });
+  h += `</tr><tr class="groups"><th class="rl">TEMPO / PROB30</th>`;
+  for (let i = 0; i < n;){ const tp = P.tempo.find(x => x.a === i); if (tp){ h += `<td colspan="${tp.b - tp.a}" class="${dayB(i) ? "day" : ""}"><span class="g tempo">${tp.a >= (+T.cfg.probAfter || 9) ? "PROB30" : "TEMPO"} ${tp.kind === "TS" ? "TS" : "SHRA"}</span></td>`; i = tp.b; } else { h += `<td class="${dayB(i) ? "day" : ""}"></td>`; i++; } }
+  h += `</tr>`;
+  const row = (label, f, cls) => `<tr><th class="rl">${label}</th>${st.map((s, i) => { const r = f(s, i); return `<td class="${dayB(i) ? "day " : ""}${(cls ? cls(s) : "")}">${r ?? ""}</td>`; }).join("")}</tr>`;
+  const pc = v => v == null ? "–" : Math.round(v*100);
+  const ptint = v => v == null ? "" : `p" style="background:rgba(var(--p),${Math.min(.6, v*.6).toFixed(3)})`;
+  h += row("Wind", s => s.wind.replace("KT", ""), () => "mono");
+  h += row("Visibility (SM)", s => visText(s.vis).replace("SM", ""), s => "mono " + (s.visCat ? "c" + Math.min(5, s.visCat) : ""));
+  h += row("Weather", s => s.wx || "", () => "mono");
+  h += row("Ceiling (ft)", s => s.ceil == null ? "none" : s.ceil, s => s.cigCat ? "c" + Math.min(5, s.cigCat) : "");
+  h += row("Clouds", s => s.layers.length ? s.layers.map(l => l.amt + hhh(l.h)).join("<br>") : "SKC", () => "mono");
+  h += `<tr><th class="rl">Precip (1 h %)</th>${st.map((s, i) => `<td class="${dayB(i) ? "day " : ""}${ptint(s.b.pop)}">${pc(s.b.pop)}</td>`).join("")}</tr>`;
+  h += `<tr><th class="rl">Thunder (1 h %)</th>${st.map((s, i) => `<td class="${dayB(i) ? "day " : ""}${ptint(s.b.ltg)}">${pc(s.b.ltg)}</td>`).join("")}</tr>`;
+  h += row("Altimeter (in)", s => s.qnh == null ? "–" : s.qnh.toFixed(2), () => "mono");
+  h += row("Temp / dew pt (°C)", s => s.tc == null ? "–" : `${Math.round(s.tc)} / ${s.b.td == null ? "–" : Math.round((s.b.td - 32)*5/9)}`);
+  h += `</tbody></table>`;
+  $("grid").innerHTML = h;
+}
+function renderCfg(){
+  $("cfggrid").innerHTML = CFG_UI.map(([title, items]) => `<div><h3>${title}</h3>${items.map(([k, l]) => typeof DEF[k] === "boolean" ? `<label>${l}<input type="checkbox" data-c="${k}" ${T.cfg[k] ? "checked" : ""}></label>` : `<label>${l}<input data-c="${k}" value="${T.cfg[k]}"></label>`).join("")}</div>`).join("") + `<div><h3>Defaults</h3><button class="btn" id="cfgReset" type="button">Restore default settings</button></div>`;
+}
+function renderSources(){
+  const fams = Object.keys(FAMILIES); let ok = 0;
+  $("srcgrid").innerHTML = fams.map(f => `<div><h3>${FAMILIES[f].label}</h3>${ALL_SOURCES.filter(s => s.fam === f).map(s => { const st = S.status[s.id] || {}; if (st.ok) ok++; return `<div class="srow ${st.ok ? "" : "na"}"><input type="checkbox" data-src="${s.id}" ${T.enabled[s.id] !== false ? "checked" : ""} aria-label="Use ${s.name}"><span>${s.name} <span class="st">${st.loading ? "loading" : st.ok ? st.note : st.err || "not available"}</span></span></div>`; }).join("")}</div>`).join("");
+  $("srcSum").textContent = `${ok} available`;
+}
+function renderStatus(){
+  const ok = Object.values(S.status).filter(s => s.ok).length, pend = Object.values(S.status).filter(s => s.loading).length;
+  const live = $("live"); live.classList.toggle("err", !S.loading && !ok);
+  live.textContent = DEMO ? "Demo guidance (synthetic data)" : pend ? `Loading guidance, ${ok} sources in` : ok ? `Guidance from ${ok} sources, fetched ${ddhhmm(S.fetchedAt)}Z` : "No guidance loaded";
+  const b = $("banner");
+  if (DEMO){ b.className = "banner show demo"; b.textContent = "Demo mode: the guidance is synthetic. Remove ?demo=1 from the address for real guidance."; }
+  else if (!S.loading && !ok){ b.className = "banner show"; b.textContent = "Couldn't load any guidance. Check the connection and press Refresh guidance; you can still write the TAF by hand."; }
+  else b.className = "banner";
+  document.querySelectorAll(".seg button[data-k]").forEach(x => x.setAttribute("aria-pressed", x.dataset.k === T.kind));
+  $("issue").value = ddhhmm(S.issue) + "Z"; $("vstart").value = ddhh(S.start); $("vend").textContent = ddhh(S.start + (T.vlen || 30)*H, true) + "Z";
+}
+let toastT = null;
+function toast(m){ const t = $("toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2400); }
+
+/* ---------- loading ---------- */
+let buildT = null;
+function scheduleBuild(){ if (buildT) return; buildT = setTimeout(() => { buildT = null; renderSources(); renderStatus(); if (!edited() || !$("taf").value.trim()) generate(true); else { S.hours = Array.from({ length:T.vlen || 30 }, (_, k) => S.start + k*H); S.states = S.hours.map(t => hourState(t, blendHour(t))); S.plan = plan(S.states); renderGrid(); } }, 200); }
+async function loadAll(){
+  const tok = S.tok = (S.tok || 0) + 1;   /* ignore results from a previous station */
+  S.loading = true; S.TL = makeTimeline(Date.now()); S.G = new SiteGuidance(SITE, S.TL, []); S.status = {}; S.fetchedAt = Date.now();
+  ALL_SOURCES.forEach(d => S.status[d.id] = { loading:true }); renderSources(); renderStatus();
+  const tasks = [];
+  const om = (d, ens) => (DEMO ? demoOM(d, ens) : fetchOM(d, ens, S.TL)).then(per => { const ms = per[SI] || []; if (ms.length){ (tok === S.tok) && S.G.addSource(d, ms); S.status[d.id] = { ok:true, note: ens ? `${ms.length} members` : "loaded" }; } else S.status[d.id] = { err:"no data" }; }).catch(() => { S.status[d.id] = { err:"not available" }; }).finally(scheduleBuild);
+  OM_DET.forEach(d => tasks.push(om(d, false))); OM_ENS.forEach(d => tasks.push(om(d, true)));
+  /* the NWS forecast (NDFD) at the station */
+  if (!DEMO){ S.status.ndfd = { loading:true }; tasks.push(fetchNDFD([{ id:"taf", lat:SITE.lat, lon:SITE.lon }], S.TL).then(per => { const x = per.taf; if (x && x.members[0].t.some(v => v != null)){ (tok === S.tok) && S.G.addSource(NDFD, x.members, { iv:x.iv, run:x.run }); S.status.ndfd = { ok:true, note:"loaded" }; } else S.status.ndfd = { err:"not reachable" }; }).catch(() => { S.status.ndfd = { err:"not reachable" }; })); }
+  MOS.forEach(d => tasks.push((DEMO ? demoMOS(d) : fetchMOS(d, S.TL)).then(per => { const x = per[SITE.stn]; if (x && x.members[0].t.some(v => v != null)){ (tok === S.tok) && S.G.addSource(d, x.members, { iv:x.iv, run:x.run }); S.status[d.id] = { ok:true, note: x.run ? `${p2(new Date(x.run).getUTCHours())}Z run` : "loaded" }; } else S.status[d.id] = { err:"no data" }; }).catch(() => { S.status[d.id] = { err:"not reachable" }; }).finally(scheduleBuild)));
+  tasks.push((DEMO ? demoPipe() : fetchPipeline(S.TL)).then(res => { for (const d of PIPE){ const x = res[d.id], p = x && x.per[SITE.id]; if (!p){ S.status[d.id] = { err: (res._status || {})[d.id] || "not in this run" }; continue; } (tok === S.tok) && S.G.addSource(d, p.members, p.iv ? { iv:p.iv, run:x.run } : null); S.status[d.id] = { ok:true, note:`${p2(new Date(x.run).getUTCHours())}Z run${p.members.length > 1 ? `, ${p.members.length} members` : ""}` }; } }).catch(() => { PIPE.forEach(d => S.status[d.id] = { err:"pipeline file missing" }); }).finally(scheduleBuild));
+  await Promise.allSettled(tasks);
+  if (tok !== S.tok) return;
+  S.loading = false; S.fetchedAt = Date.now(); scheduleBuild();
+}
+
+/* ---------- demo data (only with ?demo=1) ---------- */
+function drng(seed){ let x = seed >>> 0 || 1; return () => (x = (x*1664525 + 1013904223) >>> 0)/4294967296; }
+function dseries(r, bias){
+  const TL = S.TL, m = {}; ["t","td","sky","s10","d10","g10","s80","vis","sw","pr","pp","cl","cm","ch","slp","cig","lcb"].forEach(k => m[k] = new Array(TL.n).fill(null));
+  for (let i = 0; i < TL.n; i++){
+    const t = TL.t0 + i*H, h = lp(t).h, diur = Math.sin((h - 9)/24*2*Math.PI), storm = h >= 14 && h <= 19, night = h <= 7;
+    m.t[i] = 80 + bias + 6*diur; m.td[i] = 71 + bias*.5 - (storm ? 0 : 1); m.s10[i] = Math.max(1, 8 + 4*diur + (r() - .5)*3 + (storm ? 4 : 0));
+    m.d10[i] = (storm ? 250 : 110) + (r() - .5)*20; m.g10[i] = m.s10[i]*(storm ? 1.9 : 1.35); m.sw[i] = Math.max(0, 850*Math.sin((h - 6)/12*Math.PI));
+    m.cl[i] = storm ? 65 + r()*20 : 20 + r()*15; m.cm[i] = storm ? 50 : 10; m.ch[i] = 40; m.sky[i] = Math.max(m.cl[i], m.cm[i], m.ch[i]);
+    m.vis[i] = night && h >= 4 ? 6000 + r()*2000 : storm ? 7000 : 16000; m.slp[i] = 1015.5 + Math.sin((h - 10)/12*Math.PI)*1.2 + bias*.2;
+    m.pr[i] = storm && r() < .3 ? .12 : 0; m.cig[i] = storm ? 3200 : 30000; m.lcb[i] = storm ? 3000 : 3500;
+  }
+  m.gap = 3; return deriveMember(m, TL.n);
+}
+async function demoOM(d, ens){ await new Promise(r => setTimeout(r, 80 + Math.random()*200)); const r = drng(d.id.length*37 + d.model.length); const out = []; out[SI] = Array.from({ length: ens ? 10 : 1 }, () => { const m = dseries(r, (r() - .5)*3); m.cig = new Array(S.TL.n).fill(null); m.lcb = new Array(S.TL.n).fill(null); return m; }); return out; }
+async function demoMOS(d){
+  await new Promise(r => setTimeout(r, 120));
+  const r = drng(d.model.charCodeAt(0)*7), m = dseries(r, 0); const iv = { pop:[], tst:[] };
+  for (let t = S.TL.t0; t < S.TL.t0 + 72*H; t += H){ const h = lp(t + H).h; const storm = h >= 14 && h <= 19; iv.pop.push({ a:t, b:t + H, p: storm ? .35 : .05 }); iv.tst.push({ a:t, b:t + H, p: storm ? .3 : .02 }); }
+  return { [SITE.stn]: { members:[m], iv, run: Math.floor(Date.now()/(6*H))*6*H } };
+}
+async function demoPipe(){
+  const run = Math.floor(Date.now()/(6*H))*6*H - 6*H, tst = [], tst4 = [];
+  for (let h = 1; h <= 48; h++){ const b = run + h*H, lh = lp(b).h; const p = lh >= 15 && lh <= 19 ? .45 : .02; tst.push({ a:b - H, b, p }); if (h >= 4) tst4.push({ a:b - 4*H, b, p: Math.min(.9, p*1.8) }); }
+  return { refsct:{ run, per:{ [SITE.id]:{ members:[], iv:{ tst, tst4 } } } } };
+}
+
+/* ---------- events ---------- */
+/* ---------- station selection ---------- */
+const isUSicao = ic => /^(K|PA|PH|PG|TJ)[A-Z0-9]{2,3}$/.test(ic);
+function stationList(){ return [...TAF_SITES, ...(T.custom && T.custom.stn ? [{ id:"custom", ...T.custom }] : [])]; }
+function applyStation(id){
+  const st = stationList().find(s => s.id === id) || TAF_SITES[0];
+  T.station = st.id; saveT();
+  SITE = { id: st.id, name: st.name, point: st.stn, stn: isUSicao(st.stn) ? st.stn : null, icao: st.stn, lat: st.lat, lon: st.lon };
+  SITES.splice(0, SITES.length, SITE); SI = 0;
+  SITE.stn = SITE.stn || SITE.icao;            /* the TAF header always uses the ICAO */
+  if (!isUSicao(st.stn)) SITES[0] = { ...SITE, stn: null };   /* no MOS outside the US */
+  document.title = `TAF Generator | ${st.name} (${st.stn})`;
+  $("tafWhere").innerHTML = `<b>${st.name.replace(/</g, "&lt;")} (${st.stn})</b>, NWS format (NWSI 10-813), ${T.vlen || 30}-hour valid period`;
+  $("stripTitle").textContent = `Hourly guidance at ${st.stn}`;
+  document.querySelectorAll("#stnSel [data-st]").forEach(b => b.setAttribute("aria-pressed", b.dataset.st === st.id || (b.dataset.st === "other" && st.id === "custom")));
+  $("stnOther").hidden = st.id !== "custom" && !S.showOther;
+  if (T.custom){ $("cuIcao").value = T.custom.stn || ""; $("cuLat").value = T.custom.lat ?? ""; $("cuLon").value = T.custom.lon ?? ""; }
+}
+function renderStations(){
+  $("stnSel").innerHTML = TAF_SITES.map(s => `<button type="button" data-st="${s.id}" title="${s.name}">${s.stn}</button>`).join("") + `<button type="button" data-st="other">${T.custom && T.custom.stn ? T.custom.stn : "Other ICAO"}</button>`;
+}
+/* look an ICAO up: this site's TFC/planning tables first, then aviationweather.gov */
+async function lookupICAO(ic){
+  const known = TAF_SITES.find(s => s.stn === ic); if (known) return known;
+  try {
+    const j = await getJSON(`https://aviationweather.gov/api/data/stationinfo?ids=${ic}&format=json`, 12000);
+    const s = Array.isArray(j) ? j[0] : null; if (s && isFinite(+s.lat)) return { name: s.site || ic, lat: +s.lat, lon: +s.lon };
+  } catch (e) { /* not reachable from this browser */ }
+  return null;
+}
+function switchStation(id){
+  applyStation(id);
+  const d = store.get(LSD(), null), now = Date.now();
+  S.gen = ""; $("taf").value = "";
+  if (d && d.start && d.start + 6*H > now && d.text){ S.start = d.start; S.issue = d.issue || now; S.gen = d.gen || ""; $("taf").value = d.text; }
+  renderStatus(); renderLint(); renderNote(); loadAll();
+}
+function init(){
+  const now = Date.now();
+  renderStations(); applyStation(T.station || "kmco");
+  const draft = store.get(LSD(), null);
+  S.issue = now;
+  S.start = Math.ceil(now/H)*H;
+  if (T.kind === "AMD") S.start = Math.floor(now/H)*H;
+  if (draft && draft.start && draft.start + 6*H > now && draft.text){ S.start = draft.start; S.issue = draft.issue || now; S.gen = draft.gen || ""; $("taf").value = draft.text; }
+  renderCfg(); renderStatus(); renderLint(); renderNote();
+  $("taf").addEventListener("input", () => { renderLint(); renderNote(); saveDraft(); });
+  $("regen").onclick = () => { S.issue = Date.now(); generate(false); renderStatus(); };
+  $("stnSel").onclick = ev => {
+    const b = ev.target.closest("[data-st]"); if (!b) return;
+    if (b.dataset.st === "other"){ S.showOther = true; $("stnOther").hidden = false; if (T.custom && T.custom.stn) switchStation("custom"); else $("cuIcao").focus(); return; }
+    S.showOther = false; switchStation(b.dataset.st);
+  };
+  $("cuLoad").onclick = async () => {
+    const ic = $("cuIcao").value.trim().toUpperCase();
+    if (!/^[A-Z][A-Z0-9]{3}$/.test(ic)){ toast("Enter a four-character ICAO"); return; }
+    let la = parseFloat($("cuLat").value), lo = parseFloat($("cuLon").value), name = ic;
+    if (!isFinite(la) || !isFinite(lo)){
+      toast(`Looking up ${ic}`);
+      const f = await lookupICAO(ic);
+      if (!f){ toast(`Couldn't find ${ic}; enter its latitude and longitude`); $("cuLat").focus(); return; }
+      la = f.lat; lo = f.lon; name = f.name || ic;
+    }
+    T.custom = { stn: ic, name, lat: la, lon: lo }; saveT(); renderStations(); switchStation("custom");
+  };
+  $("vlen").value = String(T.vlen || 30);
+  $("vlen").onchange = e => { T.vlen = +e.target.value; saveT(); applyStation(T.station); renderStatus(); generate(false); };
+  $("refresh").onclick = () => { if (!S.loading) loadAll(); };
+  $("tafPublic").onclick = async () => {
+    const txt = $("taf").value.trim(); if (!txt){ toast("No TAF to publish"); return; }
+    if (!confirm("Make a public copy of this TAF for the products page?\n\nOK confirms it's cleared for public release.")) return;
+    const icao = (SITE && (SITE.icao || SITE.stn)) || (txt.match(/\b([A-Z]{4})\b/) || [])[1] || "TAF";
+    const esc2 = x => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TAF ${esc2(icao)}</title><style>body{font:15px/1.5 system-ui,sans-serif;margin:24px;color:#111;background:#fff}pre{font:14px/1.6 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;border:1px solid #ccc;border-radius:8px;padding:14px}@media (prefers-color-scheme:dark){body{background:#111;color:#eee}pre{border-color:#444}}</style></head><body><h1>TAF ${esc2(icao)}</h1><p>${esc2(SITE && SITE.name || "")}</p><pre>${esc2(txt)}</pre></body></html>`;
+    const meta = { type:"taf", key:`taf:${icao}`, title:`TAF ${icao}`, subtitle: SITE && SITE.name || "", issued: Date.now(), forecaster: "", headline: txt.split("\n")[0].slice(0, 120), text: txt };
+    const zipFn = async () => { const snap = await publicSnapshot(meta, { html }); const a = document.createElement("a"); a.href = URL.createObjectURL(snap.blob); a.download = snap.name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); };
+    await showReleaseDialog(meta, { kind:"text", text: txt }, "", zipFn);
+  };
+  $("copy").onclick = async () => { const v = $("taf").value;
+    /* the official archive: the TAF as copied for issue */
+    if (v.trim() && typeof archiveOnce === "function"){ const icao = (SITE && (SITE.icao || SITE.stn)) || (v.match(/\b([A-Z]{4})\b/) || [])[1] || "TAF"; archiveOnce(`taf|${icao}`, { type:"taf", title:`TAF ${icao}`, subtitle: SITE && SITE.name || "", issued: Date.now(), forecaster: "" }, { station: icao, text: v.trim() }); } try { await navigator.clipboard.writeText(v); } catch (e) { $("taf").select(); document.execCommand("copy"); } toast("TAF copied"); };
+  $("download").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([$("taf").value.trim() + "\n"], { type:"text/plain" })); a.download = `${SITE.stn}_TAF_${ddhhmm(S.issue)}Z.txt`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); };
+  document.querySelector(".seg:has(button[data-k])").addEventListener("click", ev => { const b = ev.target.closest("[data-k]"); if (!b) return; T.kind = b.dataset.k; saveT(); if (T.kind === "AMD"){ S.issue = Date.now(); S.start = Math.floor(S.issue/H)*H; } renderStatus(); generate(false); });
+  $("issue").addEventListener("change", e => { const m = e.target.value.trim().match(/^(\d{2})(\d{2})(\d{2})Z?$/); if (!m){ toast("Issue time is ddhhmmZ"); renderStatus(); return; } const t = fromDdhh(m[1] + m[2], Date.now()); if (t != null){ S.issue = t + (+m[3])*60e3; generate(false); } renderStatus(); });
+  $("vstart").addEventListener("change", e => { const t = fromDdhh(e.target.value.trim(), Date.now()); if (t == null){ toast("Valid start is ddhh"); renderStatus(); return; } S.start = t; renderStatus(); generate(false); });
+  $("cfggrid").addEventListener("change", ev => { const k = ev.target.dataset.c; if (!k) return; T.cfg[k] = typeof DEF[k] === "boolean" ? ev.target.checked : typeof DEF[k] === "number" ? (parseFloat(ev.target.value) || DEF[k]) : ev.target.value; saveT(); generate(false); });
+  $("cfggrid").addEventListener("click", ev => { if (ev.target.id !== "cfgReset") return; T.cfg = { ...DEF }; saveT(); renderCfg(); generate(false); });
+  $("srcgrid").addEventListener("change", ev => { const id = ev.target.dataset.src; if (!id) return; T.enabled[id] = ev.target.checked; saveT(); generate(false); });
+  /* select all / unselect all above the source list */
+  $("srcgrid").insertAdjacentHTML("beforebegin", `<div class="srcbar" id="srcBar"><button type="button" class="btn ghost" id="srcAll">Select all</button><button type="button" class="btn ghost" id="srcNone">Unselect all</button></div>`);
+  const setAllSrc = on => { for (const s of ALL_SOURCES) T.enabled[s.id] = on; saveT(); generate(false); if (typeof renderSources === "function") renderSources(); };
+  $("srcAll").onclick = () => setAllSrc(true); $("srcNone").onclick = () => setAllSrc(false);
+  loadAll();
+}
+init();
+</script>
+</body>
+</html>
