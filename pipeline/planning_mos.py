@@ -19,6 +19,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "docs", "data", "mos")
 STATIONS = ["KMCO", "KJAX", "KSAV", "KCHS", "KDAB", "KSFB", "KTLH"]   # ZJX core airports; must match SITES in docs/guidance.js
 MODELS = ["LAV", "GFS", "GFSX", "NBS", "NBE"]   # NAM MOS retired with the NAM, 3 Nov 2026
+# IEM model ids where they differ from our file names (IEM calls GFS extended MOS "MEX")
+IEM_MODEL = {"GFSX": "MEX"}
 IEM = "https://mesonet.agron.iastate.edu/api/1/mos.json?{st}&model={model}"
 SPC = "https://www.spc.noaa.gov/products/outlook/day{d}otlk_cat.nolyr.geojson"
 # WPC Excessive Rainfall Outlook, Days 1-5 (NWS map service, GeoJSON in lat/lon)
@@ -66,12 +68,12 @@ def rows_of(js):
 def main():
     os.makedirs(OUT, exist_ok=True)
     ok = 0
-    # one station per request: the IEM API rejects (HTTP 422) a request with all seven stations
+    # one station per request: the IEM API takes at most 6 stations (HTTP 422 beyond that)
     for model in MODELS:
         merged, got, bad = None, [], []
         for stn in STATIONS:
             try:
-                js = get(IEM.format(st="station=" + stn, model=model))
+                js = get(IEM.format(st="station=" + stn, model=IEM_MODEL.get(model, model)))
                 rows = rows_of(js)
                 if not rows:
                     bad.append(f"{stn} empty")

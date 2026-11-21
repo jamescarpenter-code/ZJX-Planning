@@ -477,9 +477,9 @@ function parseEcmMOS(text){
   });
   return rows;
 }
-/* IEM rejects (HTTP 422) one request for many stations, so ask for each station on its own */
+/* IEM takes at most 6 stations a request (HTTP 422 beyond that) and calls GFS extended MOS "MEX"; ask per station */
 async function iemMOS(stations, model){
-  const got = await Promise.all(stations.map(s => getJSON(`https://mesonet.agron.iastate.edu/api/1/mos.json?station=${encodeURIComponent(s)}&model=${model}`, 30000).then(rowsOf).catch(() => [])));
+  const got = await Promise.all(stations.map(s => getJSON(`https://mesonet.agron.iastate.edu/api/1/mos.json?station=${encodeURIComponent(s)}&model=${model === "GFSX" ? "MEX" : model}`, 30000).then(rowsOf).catch(() => [])));
   return got.flat();
 }
 async function fetchMOS(src, TL){
