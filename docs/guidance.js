@@ -477,6 +477,11 @@ function parseEcmMOS(text){
   });
   return rows;
 }
+/* IEM rejects (HTTP 422) one request for many stations, so ask for each station on its own */
+async function iemMOS(stations, model){
+  const got = await Promise.all(stations.map(s => getJSON(`https://mesonet.agron.iastate.edu/api/1/mos.json?station=${encodeURIComponent(s)}&model=${model}`, 30000).then(rowsOf).catch(() => [])));
+  return got.flat();
+}
 async function fetchMOS(src, TL){
   let js = null, from = "";
   try { js = await getJSON(`${DATA_BASE}data/mos/${src.model}.json?ts=${Date.now()}`, 8000); from = "mirror"; } catch (e) { js = null; }
@@ -487,8 +492,8 @@ async function fetchMOS(src, TL){
   }
   if (!js || !rowsOf(js).length){
     if (src.model === "ECM") throw new Error("no ECMWF MOS bulletin");
-    const st = stationsNow().map(s => "station=" + s).join("&");
-    js = await getJSON(`https://mesonet.agron.iastate.edu/api/1/mos.json?${st}&model=${src.model}`, 30000); from = "IEM";
+    js = { data: await iemMOS(stationsNow(), src.model) }; from = "IEM";
+    if (!js.data.length) throw new Error(`${src.model}: no rows from IEM`);
   }
   let rows = rowsOf(js);
   const byStn = {};
@@ -497,8 +502,7 @@ async function fetchMOS(src, TL){
   const missing = stationsNow().filter(s => !byStn[s] && !byStn[s.slice(1)]);
   if (from === "mirror" && missing.length && src.model !== "ECM"){
     try {
-      const j2 = await getJSON(`https://mesonet.agron.iastate.edu/api/1/mos.json?${missing.map(s => "station=" + s).join("&")}&model=${src.model}`, 30000);
-      for (const r of rowsOf(j2)){ const k = String(pick(r, ["station"]) || "").toUpperCase(); (byStn[k] = byStn[k] || []).push(r); }
+      for (const r of await iemMOS(missing, src.model)){ const k = String(pick(r, ["station"]) || "").toUpperCase(); (byStn[k] = byStn[k] || []).push(r); }
     } catch (e) { /* not reachable from this browser */ }
   }
   const out = {};

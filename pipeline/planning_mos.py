@@ -66,19 +66,32 @@ def rows_of(js):
 def main():
     os.makedirs(OUT, exist_ok=True)
     ok = 0
-    st = "&".join("station=" + s for s in STATIONS)
+    # one station per request: the IEM API rejects (HTTP 422) a request with all seven stations
     for model in MODELS:
-        try:
-            js = get(IEM.format(st=st, model=model))
-            n = len(rows_of(js))
-            if n:
-                write(f"{model}.json", js)
-                ok += 1
-                print(f"{model}: {n} rows")
-            else:
-                print(f"{model}: empty response, keeping previous file")
-        except Exception as e:  # noqa: BLE001
-            print(f"{model}: failed ({e}), keeping previous file")
+        merged, got, bad = None, [], []
+        for stn in STATIONS:
+            try:
+                js = get(IEM.format(st="station=" + stn, model=model))
+                rows = rows_of(js)
+                if not rows:
+                    bad.append(f"{stn} empty")
+                    continue
+                if merged is None:
+                    merged = dict(js) if isinstance(js, dict) else {"data": []}
+                    merged["data"] = []
+                merged["data"].extend(rows)
+                got.append(stn)
+            except Exception as e:  # noqa: BLE001
+                bad.append(f"{stn} {e}")
+        if merged and merged["data"]:
+            for i, r in enumerate(merged["data"]):
+                if isinstance(r, dict) and "index" in r:
+                    r["index"] = i
+            write(f"{model}.json", merged)
+            ok += 1
+            print(f"{model}: {len(merged['data'])} rows from {', '.join(got)}" + (f"; missing {'; '.join(bad)}" if bad else ""))
+        else:
+            print(f"{model}: failed ({'; '.join(bad) or 'no data'}), keeping previous file")
     for d in (1, 2, 3):
         try:
             js = get(SPC.format(d=d))
