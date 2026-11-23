@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ZJX Model Meteograms | MCO JAX SAV CHS DAB SFB TLH</title>
+<title>ZJX Model Meteograms | MCO JAX SAV CHS DAB TLH PNS TPA MIA ATL CLT</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=optional" rel="stylesheet">
@@ -193,7 +193,7 @@ document.addEventListener("DOMContentLoaded", function(){
 </script>
 </head>
 <body>
-<nav class="pagenav" aria-label="Products"><a href="./" data-page="planning">Planning forecast</a><a href="taf.html" data-page="taf">TAF, CWA and MIS</a><a href="meteograms.html" data-page="meteograms" aria-current="page">Meteograms</a><span class="navsp"></span><span class="seg theme" role="group" aria-label="Color theme"><button type="button" data-th="auto">Auto</button><button type="button" data-th="light">Light</button><button type="button" data-th="dark">Dark</button></span></nav>
+<nav class="pagenav" aria-label="Products"><a href="./" data-page="planning">Planning forecast</a><a href="taf.html" data-page="taf">TAF, CWA and MIS</a><a href="meteograms.html" data-page="meteograms" aria-current="page">Meteograms</a><a href="tmu.html" data-page="tmu">TMU maps</a><span class="navsp"></span><span class="seg theme" role="group" aria-label="Color theme"><button type="button" data-th="auto">Auto</button><button type="button" data-th="light">Light</button><button type="button" data-th="dark">Dark</button></span></nav>
 <header class="top">
   <div class="tbrand"><img class="unitlogo" src="zjx-logo.png" alt="CWSU ZJX" onerror="this.remove()"><div>
     <h1 id="title">Time-height meteograms</h1>
@@ -216,12 +216,12 @@ document.addEventListener("DOMContentLoaded", function(){
   <p class="note">RH ≥70/80/90% shaded green, isotherms +5 to −20 °C (0 °C in blue), wind barbs colored by speed, and the red <span class="now">NOW</span> line at the current time. Each chart is drawn in your browser from the newest run available when the page opens, at the model grid point nearest the airport. All six models come from <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>: <b>GFS</b> (NOAA), <b>ECMWF</b> IFS, <b>UKMET</b> (Met Office Global 10 km), <b>ICON</b> (DWD Global), <b>GEM</b> (Environment Canada Global) and <b>HRRR</b> (NOAA 3 km, 48 hours). Each chart uses the pressure levels that model provides. Arrow keys switch models; Shift + arrow keys switch airports. Link to one chart with <code>?site=kjax&amp;model=hrrr</code>.</p>
   <p class="note">Adapted from <a href="https://github.com/astromet/ksc-meteograms" target="_blank" rel="noopener">astromet/ksc-meteograms</a>.</p>
 </div>
-<script src="guidance.js?v=522a5cca1b"></script>
+<script src="guidance.js?v=dd8847064d"></script>
 <script src="meteogram.js?v=6b50625665"></script>
 <script>
 /* the ZJX core airports, from SITES in guidance.js */
 const MG_SITES = SITES.map(s => ({ id: s.id, stn: s.stn, name: s.name, lat: s.lat, lon: s.lon }));
-const SHORT = { kmco:"Orlando", kjax:"Jacksonville", ksav:"Savannah", kchs:"Charleston", kdab:"Daytona", ksfb:"Sanford", ktlh:"Tallahassee" };
+const SHORT = { kmco:"Orlando", kjax:"Jacksonville", ksav:"Savannah", kchs:"Charleston", kdab:"Daytona", ktlh:"Tallahassee", kpns:"Pensacola", ktpa:"Tampa", kmia:"Miami", katl:"Atlanta", kclt:"Charlotte" };
 const MODELS = ["gfs", "ecmwf", "ukmo", "icon", "gem", "hrrr"];
 const cache = {};
 const $ = id => document.getElementById(id);

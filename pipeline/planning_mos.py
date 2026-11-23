@@ -17,7 +17,7 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "docs", "data", "mos")
-STATIONS = ["KMCO", "KJAX", "KSAV", "KCHS", "KDAB", "KSFB", "KTLH"]   # ZJX core airports; must match SITES in docs/guidance.js
+STATIONS = ["KMCO", "KJAX", "KSAV", "KCHS", "KDAB", "KTLH", "KPNS", "KTPA", "KMIA", "KATL", "KCLT"]   # ZJX primary airports; must match SITES in docs/guidance.js
 MODELS = ["LAV", "GFS", "GFSX", "NBS", "NBE"]   # NAM MOS retired with the NAM, 3 Nov 2026
 # IEM model ids where they differ from our file names (IEM calls GFS extended MOS "MEX")
 IEM_MODEL = {"GFSX": "MEX"}

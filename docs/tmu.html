@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ZJX TMU Maps | OM/TMU/OS hazards by period</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=optional" rel="stylesheet">
+<style>
+:root{
+  --paper:#EEF2F1; --panel:#FFFFFF; --panel-2:#F6F8F8; --ink:#13202E; --ink-2:#4B5A68; --ink-3:#7D8B97;
+  --rule:#D4DBDF; --rule-2:#E6EBED; --accent:#0B6E79; --accent-ink:#FFFFFF; --edit:#B5730C; --edit-bg:#FFF4DF;
+  --warn:#B23A2E; --warn-bg:#FBE9E6; --ok:#2F7A4A;
+  --c1:#F6D58A; --c2:#EFA765; --c3:#E07152; --c4:#C2414A; --c5:#8E2F5B;
+  --hires:#7A4FA0; --blend:#0B6E79; --global:#3D6FB0; --ens:#8A9AA8; --mos:#B5730C; --ct:#B4472A; --peak:#3359A8;
+  --p:11,110,121; --hot:178,58,46; --cold:52,102,170;
+  --font:"Barlow", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --cond:"Barlow Condensed", "Arial Narrow", "Segoe UI", Arial, sans-serif;
+  --mono:"IBM Plex Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D151D; --panel:#142029; --panel-2:#18252F; --ink:#E5ECF1; --ink-2:#A3B1BD; --ink-3:#73828F;
+    --rule:#283844; --rule-2:#1F2D38; --accent:#4DBFC8; --accent-ink:#06232A; --edit:#E3A53D; --edit-bg:#3A2A0E;
+    --warn:#F08070; --warn-bg:#3B1C18; --ok:#6CC08A;
+    --c1:#6B5A26; --c2:#7A4A26; --c3:#80382A; --c4:#7A2430; --c5:#5E1E44;
+    --hires:#B892DA; --blend:#4DBFC8; --global:#7FA8E0; --ens:#6E7F8D; --mos:#E3A53D; --ct:#F08A6A; --peak:#93B4F0;
+    --p:77,191,200; --hot:240,128,112; --cold:120,160,230;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D151D; --panel:#142029; --panel-2:#18252F; --ink:#E5ECF1; --ink-2:#A3B1BD; --ink-3:#73828F;
+  --rule:#283844; --rule-2:#1F2D38; --accent:#4DBFC8; --accent-ink:#06232A; --edit:#E3A53D; --edit-bg:#3A2A0E;
+  --warn:#F08070; --warn-bg:#3B1C18; --ok:#6CC08A;
+  --c1:#6B5A26; --c2:#7A4A26; --c3:#80382A; --c4:#7A2430; --c5:#5E1E44;
+  --p:77,191,200; color-scheme: dark;
+}
+:root{ box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
+*,*::before,*::after{ box-sizing:inherit; }
+html{ scroll-padding-top:env(safe-area-inset-top,0px); }
+body{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.45 var(--font); font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased; }
+button,input,select,textarea{ font:inherit; color:inherit; }
+:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+a{ color:var(--accent); }
+
+.top{ display:grid; grid-template-columns:1fr auto; gap:14px 28px; align-items:center; padding:18px 28px 16px; background:var(--panel); border-bottom:1px solid var(--rule); }
+.top h1{ margin:0; font:700 26px/1 var(--cond); }
+.top .where{ margin-top:6px; color:var(--ink-2); font-size:14px; }
+.top .where b{ color:var(--ink); }
+.actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.btn{ border:1px solid var(--rule); background:var(--panel); border-radius:8px; padding:7px 13px; cursor:pointer; font-weight:500; white-space:nowrap; text-decoration:none; color:var(--ink); display:inline-block; }
+.btn:hover{ border-color:var(--ink-3); }
+.btn.primary{ background:var(--ink); color:var(--panel); border-color:var(--ink); font-weight:600; padding:8px 18px; }
+.seg{ display:inline-flex; border:1px solid var(--rule); border-radius:8px; overflow:hidden; }
+.seg button{ border:0; background:var(--panel); padding:6px 12px; cursor:pointer; font-size:13.5px; }
+.seg button[aria-pressed="true"]{ background:var(--ink); color:var(--panel); }
+
+.statusline{ display:flex; flex-wrap:wrap; gap:8px 22px; align-items:center; padding:10px 28px; font-size:13.5px; color:var(--ink-2); border-bottom:1px solid var(--rule); background:var(--panel-2); }
+.statusline .k{ color:var(--ink-3); margin-right:6px; }
+.statusline .live::before{ content:""; display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--accent); margin-right:7px; vertical-align:1px; }
+.statusline .live.err::before{ background:var(--warn); }
+.statusline label{ display:inline-flex; gap:7px; align-items:center; }
+.statusline input{ width:78px; padding:3px 7px; border:1px solid var(--rule); border-radius:6px; background:var(--panel); font-family:var(--mono); }
+.statusline .sp{ flex:1; }
+.stnline{ background:var(--panel); }
+.stnother{ display:inline-flex; gap:10px; align-items:center; }
+.stnother[hidden]{ display:none; }
+.statusline select{ border:1px solid var(--rule); border-radius:6px; padding:3px 6px; background:var(--panel); }
+.banner{ margin:14px 28px 0; padding:10px 14px; border-radius:8px; background:var(--warn-bg); color:var(--warn); font-weight:500; display:none; }
+.banner.show{ display:block; }
+.banner.demo{ background:var(--edit-bg); color:var(--edit); }
+
+main{ padding:18px 28px 40px; display:grid; gap:18px; }
+main > *{ min-width:0; }
+[hidden]{ display:none !important; }
+.tbrand{ display:flex; gap:14px; align-items:center; }
+.unitlogo{ height:60px; width:auto; flex:none; filter:drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
+.pagenav{ display:flex; gap:2px; padding:8px 28px 0; background:var(--panel); border-bottom:1px solid var(--rule); }
+.pagenav{ align-items:center; flex-wrap:wrap; }
+.pagenav a{ white-space:nowrap; }
+.pagenav .navsp{ flex:1; }
+.pagenav a.offl{ font:500 13px var(--font); border-bottom:0; margin-right:10px; }
+.pagenav .theme{ margin:0 0 4px; }
+.pagenav .theme button{ padding:4px 10px; font-size:12.5px; }
+.pagenav a{ padding:8px 16px 9px; font:600 15px var(--cond); letter-spacing:.2px; color:var(--ink-2); text-decoration:none; border-bottom:3px solid transparent; }
+.pagenav a:hover{ color:var(--ink); }
+.pagenav a[aria-current="page"]{ color:var(--accent); border-bottom-color:var(--accent); }
+.panel{ background:var(--panel); border:1px solid var(--rule); border-radius:12px; }
+@media (max-width:760px){
+  .top{ grid-template-columns:1fr; }
+  .top,.statusline,main{ padding-left:14px; padding-right:14px; }
+  .banner{ margin-left:14px; margin-right:14px; }
+  textarea#taf{ font-size:14px; }
+}
+@media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
+</style>
+<style>
+.stamp{ font:13px var(--mono); color:var(--ink-3); text-align:right; }
+.wrap{ max-width:1400px; margin:0 auto; padding:16px 28px 32px; display:grid; gap:12px; }
+.row{ display:flex; flex-wrap:wrap; gap:6px; align-items:stretch; }
+.row .lbl{ font:600 12px var(--cond); letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); align-self:center; min-width:62px; }
+.tab{ display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:120px; padding:8px 14px; border:1px solid var(--rule); border-radius:8px; background:var(--panel); color:var(--ink); cursor:pointer; font:600 15px/1 var(--cond); letter-spacing:.03em; }
+.tab small{ font:400 11.5px/1 var(--mono); color:var(--ink-3); letter-spacing:0; }
+.tab[aria-selected="true"]{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+.tab[aria-selected="true"] small{ color:var(--accent-ink); opacity:.85; }
+.tab .nowtag{ display:inline-block; margin-left:6px; padding:1px 5px; border-radius:4px; background:#d61f1f; color:#fff; font:700 10px/1.2 var(--font); letter-spacing:.06em; vertical-align:2px; }
+.row .btn{ align-self:center; }
+.row .sp{ flex:1; }
+.chips{ display:grid; gap:6px; font-size:13.5px; }
+.chips .ln{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.chips .k{ font:600 12px var(--cond); letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); min-width:86px; }
+.chip{ display:inline-flex; gap:6px; align-items:baseline; border-radius:5px; padding:2px 9px; font-weight:600; color:#fff; background:var(--c); }
+.chip.aw{ background:transparent; color:var(--ink); border:2px solid var(--c); padding:0 7px; }
+.chip small{ font:400 11.5px var(--mono); opacity:.9; }
+.chips .none{ color:var(--ink-3); }
+figure{ margin:0; background:#fff; border:1px solid var(--rule); border-radius:12px; overflow:hidden; min-height:200px; display:grid; place-items:center; }
+figure img{ display:block; width:100%; height:auto; }
+.msg{ padding:40px 20px; color:var(--ink-3); text-align:center; }
+.msg.err{ color:var(--warn); }
+.banner{ margin:0; }
+.note{ color:var(--ink-3); font-size:12.5px; margin:0; }
+@media (max-width:700px){ .wrap{ padding:12px 12px 28px; } .tab{ min-width:0; } }
+</style>
+<script>
+/* color theme shared by all pages: auto (follow the system), light or dark */
+(function(){ var t; try { t = localStorage.getItem("erwx:theme"); } catch (e) {} if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); })();
+document.addEventListener("DOMContentLoaded", function(){
+  var cur = function(){ return document.documentElement.getAttribute("data-theme") || "auto"; };
+  var mark = function(){ document.querySelectorAll(".theme [data-th]").forEach(function(b){ b.setAttribute("aria-pressed", b.getAttribute("data-th") === cur()); }); };
+  document.querySelectorAll(".theme [data-th]").forEach(function(b){ b.addEventListener("click", function(){
+    var t = b.getAttribute("data-th");
+    if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t);
+    try { localStorage.setItem("erwx:theme", t); } catch (e) {}
+    mark(); window.dispatchEvent(new Event("themechange"));
+  }); });
+  mark();
+});
+</script>
+</head>
+<body>
+<nav class="pagenav" aria-label="Products"><a href="./" data-page="planning">Planning forecast</a><a href="taf.html" data-page="taf">TAF, CWA and MIS</a><a href="meteograms.html" data-page="meteograms">Meteograms</a><a href="tmu.html" data-page="tmu" aria-current="page">TMU maps</a><span class="navsp"></span><span class="seg theme" role="group" aria-label="Color theme"><button type="button" data-th="auto">Auto</button><button type="button" data-th="light">Light</button><button type="button" data-th="dark">Dark</button></span></nav>
+<header class="top">
+  <div class="tbrand"><img class="unitlogo" src="zjx-logo.png" alt="CWSU ZJX" onerror="this.remove()"><div>
+    <h1 id="title">OM/TMU/OS maps</h1>
+    <div class="where" id="where">Loading the latest maps…</div>
+  </div></div>
+  <span class="stamp" id="stamp"></span>
+</header>
+<div class="wrap">
+  <div class="banner" id="banner"></div>
+  <div class="row" role="tablist" aria-label="Period" id="periods"><span class="lbl">Period</span><span class="sp"></span><a class="btn" id="open" hidden href="#" target="_blank" rel="noopener">Open full size</a><button class="btn" id="refresh" type="button">Refresh</button></div>
+  <div class="chips" id="chips"></div>
+  <figure id="fig"><div class="msg" id="msg">Fetching the latest TMU maps…</div></figure>
+  <p class="note">Solid = hazard, outlined = awareness. Maps and hazard list come live from the daily <a href="https://github.com/standardweather/ZJX-wx-risk" target="_blank" rel="noopener">ZJX-wx-risk</a> run (<a id="src" href="https://standardweather.github.io/ZJX-wx-risk/#tmu" target="_blank" rel="noopener">shift briefings page</a>), so this tab shows whatever was published last. Arrow keys switch periods; link to one with <code>?p=AM</code>, <code>PM</code> or <code>MID</code>. Unofficial briefing aid, automatically generated.</p>
+</div>
+<script>
+/* Live view of the TMU maps that standardweather/ZJX-wx-risk publishes each morning (tmu/tmu.json + tmu_{AM,PM,MID}.png).
+   GitHub Pages first; raw.githubusercontent.com (briefings branch) as a fallback. Nothing is copied into this repo. */
+const BASES = ["https://standardweather.github.io/ZJX-wx-risk/tmu/", "https://raw.githubusercontent.com/standardweather/ZJX-wx-risk/briefings/tmu/"];
+const COLORS = { ts:"#d7263d", turb_sev:"#a6400b", turb_ext:"#5a1608", ice_sev:"#283593", ifr:"#8e24aa", turb_mod:"#e8871e", ice_mod:"#1e88e5", llws:"#00897b" };
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
+const pad = n => String(n).padStart(2, "0");
+const etDay = d => d.toLocaleDateString("en-CA", { timeZone:"America/New_York" });
+let data = null, base = BASES[0], cur = null;
+
+async function load(){
+  let err;
+  for (const b of BASES){
+    try {
+      const r = await fetch(b + "tmu.json?t=" + Date.now(), { cache:"no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      if (!j || !Array.isArray(j.periods) || !j.periods.length) throw new Error("no periods in tmu.json");
+      base = b; return j;
+    } catch (e) { err = e; }
+  }
+  throw err;
+}
+function nowPeriod(j){
+  const t = Date.now();
+  const p = j.periods.find(p => t >= Date.parse(p.start_utc) && t < Date.parse(p.end_utc));
+  return p ? p.period : null;
+}
+function render(){
+  const j = data, q = new URLSearchParams(location.search), live = nowPeriod(j);
+  const issued = j.issued || "", v = issued.replace(/\D/g, "");
+  const d = new Date(j.day + "T12:00:00Z");
+  $("title").textContent = "OM/TMU/OS maps · " + d.toLocaleDateString("en-US", { weekday:"short", day:"numeric", month:"short", timeZone:"UTC" });
+  $("where").innerHTML = "<b>ZJX ARTCC</b> · issued " + esc(issued.replace(/^\d{4}-\d\d-\d\dT(\d\d):(\d\d)Z?$/, "$1$2Z")) + (j.sources ? ` · <span title="${esc(j.sources)}">HRRR, NBM, GFS</span>` : "");
+  const stale = j.day !== etDay(new Date());
+  $("banner").className = "banner" + (stale ? " show" : "");
+  $("banner").textContent = stale ? `These maps are for ${j.day}, not today. Today's run hasn't published yet; check back after about 0800Z or open the shift briefings page.` : "";
+  document.querySelectorAll("#periods .tab").forEach(t => t.remove());
+  const tabs = j.periods.map(p => `<button class="tab" role="tab" data-p="${esc(p.period)}"><span>${esc(p.name || p.period)}${p.period === live && !stale ? '<span class="nowtag">NOW</span>' : ""}</span><small>${esc(p.local || "")}</small></button>`).join("");
+  $("periods").querySelector(".lbl").insertAdjacentHTML("afterend", tabs);
+  document.querySelectorAll("#periods .tab").forEach(t => t.addEventListener("click", () => show(t.dataset.p)));
+  const want = (q.get("p") || "").toUpperCase();
+  show(j.periods.some(p => p.period === want) ? want : (!stale && live) || cur || j.periods[0].period, v);
+}
+function show(pid, v){
+  const j = data, p = j.periods.find(x => x.period === pid) || j.periods[0];
+  v = v || (j.issued || "").replace(/\D/g, "");
+  cur = p.period;
+  history.replaceState(null, "", "?p=" + cur);
+  document.querySelectorAll("#periods .tab").forEach(t => t.setAttribute("aria-selected", String(t.dataset.p === cur)));
+  const on = (p.items || []).filter(i => i.present);
+  const chip = i => `<span class="chip${i.kind === "AWARENESS" ? " aw" : ""}" style="--c:${COLORS[i.key] || "#607d8b"}" title="${esc([i.hours, i.detail, i.source].filter(Boolean).join(" · "))}">${esc(i.name)}${i.hours ? `<small>${esc(i.hours)}</small>` : ""}</span>`;
+  const line = (k, label) => { const xs = on.filter(i => i.kind === k); return `<div class="ln"><span class="k">${label}</span>${xs.length ? xs.map(chip).join("") : '<span class="none">None</span>'}</div>`; };
+  const na = (p.items || []).filter(i => i.available === false).map(i => i.name);
+  $("chips").innerHTML = line("HAZARD", "Hazard") + line("AWARENESS", "Awareness") + (na.length ? `<div class="ln"><span class="k">No data</span><span class="none">${esc(na.join(", "))}</span></div>` : "");
+  const src = base + (p.image || `tmu_${p.period}.png`) + "?v=" + v;
+  $("open").href = src; $("open").hidden = false;
+  const fig = $("fig");
+  fig.querySelectorAll("img").forEach(i => i.remove());
+  const msg = $("msg"); msg.hidden = false; msg.className = "msg"; msg.textContent = "Loading the " + (p.name || p.period).toLowerCase() + " map…";
+  const img = new Image();
+  img.alt = `OM/TMU/OS ${p.name || p.period} map ${p.local || ""}: ` + (on.length ? on.map(i => i.name).join(", ") : "no hazards");
+  img.onload = () => { if (cur !== p.period) return; msg.hidden = true; fig.appendChild(img); };
+  img.onerror = () => { if (cur !== p.period) return; msg.className = "msg err"; msg.textContent = "Could not load this map. Try Refresh in a minute."; };
+  img.src = src;
+}
+async function start(){
+  $("stamp").textContent = "";
+  try {
+    data = await load();
+    render();
+    const t = new Date();
+    $("stamp").textContent = `Checked ${pad(t.getUTCHours())}${pad(t.getUTCMinutes())}Z`;
+  } catch (e) {
+    $("msg").className = "msg err";
+    $("msg").textContent = "Could not reach the TMU maps (" + e.message + "). Try Refresh, or open the shift briefings page below.";
+    $("where").textContent = "Maps unavailable";
+  }
+}
+document.addEventListener("keydown", e => {
+  if (!data || (e.key !== "ArrowRight" && e.key !== "ArrowLeft") || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const ids = data.periods.map(p => p.period), i = ids.indexOf(cur), n = ids[(i + (e.key === "ArrowRight" ? 1 : -1) + ids.length) % ids.length];
+  show(n); document.querySelector(`#periods [data-p="${n}"]`).focus(); e.preventDefault();
+});
+$("refresh").addEventListener("click", start);
+/* pick up the new run without a reload when the page is left open */
+setInterval(() => { if (!document.hidden) start(); }, 30 * 60 * 1000);
+start();
+</script>
+</body>
+</html>

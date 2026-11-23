@@ -40,15 +40,19 @@ except ImportError:  # the tests inject a stand-in
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "docs", "data", "hires.json")
 
-# Must match SITES in docs/guidance.js (ZJX core airports)
+# Must match SITES in docs/guidance.js (ZJX primary airports)
 SITES = [
     ("kmco", 28.4294, -81.3090),
     ("kjax", 30.4941, -81.6879),
     ("ksav", 32.1276, -81.2021),
     ("kchs", 32.8986, -80.0405),
     ("kdab", 29.1799, -81.0581),
-    ("ksfb", 28.7776, -81.2375),
     ("ktlh", 30.3965, -84.3503),
+    ("kpns", 30.4734, -87.1866),
+    ("ktpa", 27.9755, -82.5332),
+    ("kmia", 25.7959, -80.2870),
+    ("katl", 33.6367, -84.4281),
+    ("kclt", 35.2140, -80.9431),
 ]
 
 NOMADS = "https://nomads.ncep.noaa.gov/pub/data/nccf/com"
