@@ -4,23 +4,27 @@ const DATA_BASE = (typeof window !== "undefined" && window.DATA_BASE) || "";
 const LOGO_SRC = (typeof window !== "undefined" && window.LOGO_SRC) || "zjx-logo.png";
 const SEAL_SRC = (typeof window !== "undefined" && window.SEAL_SRC) || "ussf-seal.png";
 /* ============================================================
-   ZJX Terminal Planning Forecast — CWSU Jacksonville (ZJX) core airports
+   ZJX Terminal Planning Forecast — CWSU Jacksonville (ZJX) primary airports
    Guidance: Open-Meteo deterministic + ensemble models, IEM MOS
    (LAMP, GFS, GFS-X, NBM text). Everything runs in the page.
    ============================================================ */
 /* local time: Eastern for the ZJX tools (TLH is Eastern too); the personal page uses its location's time zone */
 const TZ = (() => { try { if (typeof window !== "undefined" && window.PAGE === "personal"){ const p = JSON.parse(localStorage.getItem("persfx:v1:prefs") || "{}"); return (p.exp && p.exp.tz) || "America/New_York"; } } catch (e) { /* fall back */ } return "America/New_York"; })();
 const H = 3600e3;
-/* ZJX core airports. rwy: runway ends as [name, true heading]; true = magnetic + declination (east +) */
+/* ZJX primary airports. rwy: runway ends as [name, true heading]; true = magnetic + declination (east +) */
 const RWY = (decl, ...ends) => ends.map(e => [e, (parseInt(e, 10)*10 + decl + 360) % 360]);
 const SITES = [
-  { id:"kmco", off:[5,7,"start"], name:"Orlando Intl",          point:"MCO", stn:"KMCO", lat:28.4294, lon:-81.3090, hot:95, tag:"MCO", rwy:RWY(-6, "17L","35R","17R","35L","18L","36R","18R","36L") },
-  { id:"kjax", off:[5,3,"start"], name:"Jacksonville Intl",     point:"JAX", stn:"KJAX", lat:30.4941, lon:-81.6879, hot:95, tag:"JAX", rwy:RWY(-7, "08","26","14","32") },
-  { id:"ksav", off:[-5,3,"end"], name:"Savannah/Hilton Head",  point:"SAV", stn:"KSAV", lat:32.1276, lon:-81.2021, hot:95, tag:"SAV", rwy:RWY(-7, "10","28","01","19") },
-  { id:"kchs", off:[5,3,"start"], name:"Charleston AFB/Intl",   point:"CHS", stn:"KCHS", lat:32.8986, lon:-80.0405, hot:95, tag:"CHS", rwy:RWY(-8, "15","33","03","21") },
-  { id:"kdab", off:[5,2,"start"], name:"Daytona Beach Intl",    point:"DAB", stn:"KDAB", lat:29.1799, lon:-81.0581, hot:95, tag:"DAB", rwy:RWY(-6, "07L","25R","07R","25L","16","34") },
-  { id:"ksfb", off:[-5,0,"end"], name:"Orlando Sanford Intl",  point:"SFB", stn:"KSFB", lat:28.7776, lon:-81.2375, hot:95, tag:"SFB", rwy:RWY(-6, "09L","27R","09C","27C","09R","27L","18","36") },
-  { id:"ktlh", off:[5,3,"start"], name:"Tallahassee Intl",      point:"TLH", stn:"KTLH", lat:30.3965, lon:-84.3503, hot:95, tag:"TLH", rwy:RWY(-4, "09","27","18","36") },
+  { id:"kmco", city:"Orlando", off:[5,3,"start"], name:"Orlando Intl",          point:"MCO", stn:"KMCO", lat:28.4294, lon:-81.3090, hot:95, tag:"MCO", rwy:RWY(-6, "17L","35R","17R","35L","18L","36R","18R","36L") },
+  { id:"kjax", city:"Jacksonville", off:[5,3,"start"], name:"Jacksonville Intl",     point:"JAX", stn:"KJAX", lat:30.4941, lon:-81.6879, hot:95, tag:"JAX", rwy:RWY(-7, "08","26","14","32") },
+  { id:"ksav", city:"Savannah", off:[-5,3,"end"], name:"Savannah/Hilton Head",  point:"SAV", stn:"KSAV", lat:32.1276, lon:-81.2021, hot:95, tag:"SAV", rwy:RWY(-7, "10","28","01","19") },
+  { id:"kchs", city:"Charleston", off:[5,3,"start"], name:"Charleston AFB/Intl",   point:"CHS", stn:"KCHS", lat:32.8986, lon:-80.0405, hot:95, tag:"CHS", rwy:RWY(-8, "15","33","03","21") },
+  { id:"kdab", city:"Daytona Beach", off:[5,2,"start"], name:"Daytona Beach Intl",    point:"DAB", stn:"KDAB", lat:29.1799, lon:-81.0581, hot:95, tag:"DAB", rwy:RWY(-6, "07L","25R","07R","25L","16","34") },
+  { id:"ktlh", city:"Tallahassee", off:[5,3,"start"], name:"Tallahassee Intl",      point:"TLH", stn:"KTLH", lat:30.3965, lon:-84.3503, hot:95, tag:"TLH", rwy:RWY(-4, "09","27","18","36") },
+  { id:"kpns", city:"Pensacola", off:[0,-5,"middle"], name:"Pensacola Intl",        point:"PNS", stn:"KPNS", lat:30.4734, lon:-87.1866, hot:95, tag:"PNS", rwy:RWY(-2, "17","35","08","26") },
+  { id:"ktpa", city:"Tampa", off:[-5,3,"end"], name:"Tampa Intl",            point:"TPA", stn:"KTPA", lat:27.9755, lon:-82.5332, hot:95, tag:"TPA", rwy:RWY(-6, "01L","19R","01R","19L","10","28") },
+  { id:"kmia", city:"Miami", off:[-5,3,"end"], name:"Miami Intl",            point:"MIA", stn:"KMIA", lat:25.7959, lon:-80.2870, hot:95, tag:"MIA", rwy:RWY(-7, "08L","26R","08R","26L","09","27","12","30") },
+  { id:"katl", city:"Atlanta", off:[5,3,"start"], name:"Atlanta Hartsfield-Jackson Intl", point:"ATL", stn:"KATL", lat:33.6367, lon:-84.4281, hot:95, tag:"ATL", rwy:RWY(-5, "08L","26R","08R","26L","09L","27R","09R","27L","10","28") },
+  { id:"kclt", city:"Charlotte", off:[5,4,"start"], name:"Charlotte Douglas Intl", point:"CLT", stn:"KCLT", lat:35.2140, lon:-80.9431, hot:95, tag:"CLT", rwy:RWY(-8, "18L","36R","18C","36C","18R","36L","05","23") },
 ];
 const STATIONS = [...new Set(SITES.map(s => s.stn))];
 /* MOS stations for whatever points the page is using (the exposure page swaps SITES) */

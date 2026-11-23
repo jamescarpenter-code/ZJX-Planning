@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ZJX Terminal Planning Forecast | MCO JAX SAV CHS DAB SFB TLH</title>
+<title>ZJX Terminal Planning Forecast | MCO JAX SAV CHS DAB TLH PNS TPA MIA ATL CLT</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=optional" rel="stylesheet">
@@ -45,7 +45,7 @@ button,input,select{ font:inherit; color:inherit; }
 
 /* ---------- top bar ---------- */
 .top{ display:grid; grid-template-columns:1fr auto; grid-template-areas:"brand actions" "sites sites"; gap:14px 28px; align-items:center; padding:18px 28px 16px; background:var(--panel); border-bottom:1px solid var(--rule); }
-.locator{ width:120px; height:100px; flex:none; }
+.locator{ width:100px; height:121px; flex:none; }
 .locator .coast{ fill:none; stroke:var(--ink-3); stroke-width:1.2; stroke-linejoin:round; }
 .locator .water{ fill:var(--panel-2); }
 .locator .land{ fill:var(--panel); stroke:var(--ink-3); stroke-width:.7; stroke-linejoin:round; }
@@ -57,7 +57,7 @@ button,input,select{ font:inherit; color:inherit; }
 .brand h1{ margin:0; font:700 26px/1 var(--cond); letter-spacing:.2px; }
 .brand .where{ margin-top:6px; color:var(--ink-2); font-size:14px; }
 .brand .where b{ color:var(--ink); font-weight:600; }
-.sites{ grid-area:sites; display:flex; flex-wrap:nowrap; gap:0; justify-self:start; margin-left:96px; border:1px solid var(--rule); border-radius:10px; overflow:hidden; background:var(--panel-2); }
+.sites{ grid-area:sites; display:flex; flex-wrap:wrap; gap:0; justify-self:start; margin-left:96px; border:1px solid var(--rule); border-radius:10px; overflow:hidden; background:var(--panel-2); }
 .sites button{ border:0; background:transparent; padding:8px 18px 9px; cursor:pointer; text-align:left; border-right:1px solid var(--rule); min-width:0; white-space:nowrap; }
 .sites button:last-child{ border-right:0; }
 .sites button .n{ display:block; font:600 15px/1.15 var(--cond); }
@@ -385,7 +385,7 @@ document.addEventListener("DOMContentLoaded", function(){
 <header class="top">
   <div class="brand">
     <img class="unitlogo" src="zjx-logo.png" alt="CWSU ZJX" onerror="this.remove()">
-    <svg class="locator" id="locator" viewBox="0 0 120 100" aria-label="Forecast point locator"></svg>
+    <svg class="locator" id="locator" viewBox="0 0 100 121" aria-label="Forecast point locator"></svg>
     <div>
       <h1 id="pageTitle">ZJX terminal planning forecast</h1>
       <div class="where" id="where"></div>
@@ -554,7 +554,7 @@ document.addEventListener("DOMContentLoaded", function(){
   </form>
 </dialog>
 <div class="toast" id="toast"></div>
-<script src="guidance.js?v=522a5cca1b"></script>
-<script src="planning-app.js?v=d819c7c179"></script>
+<script src="guidance.js?v=dd8847064d"></script>
+<script src="planning-app.js?v=2b2cfc947b"></script>
 </body>
 </html>

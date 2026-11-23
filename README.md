@@ -15,8 +15,12 @@ pages (MWP, marine, burn, exposure, LMEF, verification) removed.
 | Savannah/Hilton Head | SAV (32.1276, -81.2021) | KSAV | 10/28, 01/19 (−7°) |
 | Charleston AFB/Intl | CHS (32.8986, -80.0405) | KCHS | 15/33, 03/21 (−8°) |
 | Daytona Beach Intl | DAB (29.1799, -81.0581) | KDAB | 07L/25R, 07R/25L, 16/34 (−6°) |
-| Orlando Sanford Intl | SFB (28.7776, -81.2375) | KSFB | 09L/27R, 09C/27C, 09R/27L, 18/36 (−6°) |
 | Tallahassee Intl | TLH (30.3965, -84.3503) | KTLH | 09/27, 18/36 (−4°) |
+| Pensacola Intl | PNS (30.4734, -87.1866) | KPNS | 17/35, 08/26 (−2°) |
+| Tampa Intl | TPA (27.9755, -82.5332) | KTPA | 01L/19R, 01R/19L, 10/28 (−6°) |
+| Miami Intl | MIA (25.7959, -80.2870) | KMIA | 08L/26R, 08R/26L, 09/27, 12/30 (−7°) |
+| Atlanta Hartsfield-Jackson Intl | ATL (33.6367, -84.4281) | KATL | 08L/26R, 08R/26L, 09L/27R, 09R/27L, 10/28 (−5°) |
+| Charlotte Douglas Intl | CLT (35.2140, -80.9431) | KCLT | 18L/36R, 18C/36C, 18R/36L, 05/23 (−8°) |
 
 To change the airports, edit `SITES` in `docs/guidance.js`, `STATIONS` in `pipeline/planning_mos.py`
 and `SITES` in `pipeline/planning_hires.py` (ids and coordinates must match).
@@ -42,14 +46,14 @@ be edited on the graph or in the table; edits stay in the browser.
   crosswind, gusts, freeze, SPC and WPC risks across the airports by day, with an editable bottom line and
   key concerns. Download as PDF or HTML, or copy as text. Rain is off by default (turn it on under
   *What the brief shows*).
-* Edits only carry over to airports within 60 km (MCO and SFB); consistency flags use the same distance.
+* Edits only carry over to airports within 60 km of each other (none of the current airports are that close); consistency flags use the same distance.
 * **Save and publish** downloads an Excel workbook and/or CSV with every row (ceiling, visibility, flight
   category, best runway, crosswind and the chances included).
 
 ### TAF, CWA and MIS (`taf.html`)
 Three tabs; `taf.html#cwa` and `taf.html#mis` open a tab directly.
 
-**TAF**: an NWS-format (NWSI 10-813) starting point for any of the seven airports or any ICAO, from the
+**TAF**: an NWS-format (NWSI 10-813) starting point for any of the eleven airports or any ICAO, from the
 same hourly blend. It writes the initial group and FM groups where ceiling or visibility category, weather
 or wind change for at least the minimum period; TEMPO for thunderstorm and shower chances between your
 TEMPO and prevailing thresholds, switching to PROB30 after the first 9 hours (PROB30 up to 6 h, TEMPO up to
