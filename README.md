@@ -83,6 +83,14 @@ chart with `meteograms.html?site=kjax&model=hrrr`. Adapted from
 [astromet/ksc-meteograms](https://github.com/astromet/ksc-meteograms); the airports come from `SITES` in
 `docs/guidance.js`.
 
+### TMU maps (`tmu.html`)
+The OM/TMU/OS hazard maps (Morning 0500–1300, Afternoon 1300–2100, Overnight 2100–0500 local) that
+[standardweather/ZJX-wx-risk](https://github.com/standardweather/ZJX-wx-risk) makes each morning. The page
+reads `tmu/tmu.json` and the three PNGs live from that repo's GitHub Pages site (falling back to the
+`briefings` branch on raw.githubusercontent.com), so nothing is copied here and it always shows the latest
+run. It opens on the current period, lists the hazard and awareness areas with their hours, warns when the
+maps are not for today, and rechecks every 30 minutes while open. Link to one period with `tmu.html?p=PM`.
+
 ## Guidance
 * Open-Meteo, fetched by the page: HRRR, NBM, GFS, ECMWF IFS and AIFS, ICON, GEM, UKMO, plus GEFS,
   ECMWF ENS, AIFS ENS, ICON EPS and GEPS members.
