@@ -1524,156 +1524,211 @@ function markHover(i){
 const visStep = (down, right) => across() ? [right, down] : [down, right];
 function renderAll(){ recompute(); if (IS_PLANNING) saveFOR(); renderSites(); renderRowPick(); renderPlanBar(); renderParams(); renderStatus(); renderMatrix(); if (IS_PLANNING || PERSONAL) renderQpfDay(); renderChart(); renderLinkBar(); if (PERSONAL) renderPersSummary(); if (BURN){ renderFWF(); olLater(); } if (HOOKS.rendered) HOOKS.rendered(); }
 
-/* ---------- recent verification: the last 24 h of observations against the guidance ----------
-   Observations are the hourly tower / METAR / MRMS / MERLIN record from the verification workflow
-   (data/verif/obs). Model values for past hours come from Open-Meteo's recent runs (past_days). */
-const VERIF_PTS = { "ksc-inland":[28.6150,-80.6945], "ksc-pads":[28.6272,-80.6208], "cape-inland":[28.4686,-80.5667], "cape-pad37":[28.5314,-80.5650], "patrick":[28.2349,-80.6101] };
-const RECENT = { obs:{}, loading:{}, sel:null, part:0 };
-function obsPointFor(s){
-  if (VERIF_PTS[s.id]) return [s.id, 0];
-  let best = null, bd = 9; for (const [id, ll] of Object.entries(VERIF_PTS)){ const d = kmBetween(s.lat, s.lon, ll[0], ll[1]); if (d < bd){ bd = d; best = id; } }
-  return best ? [best, bd] : [null, null];
+/* ---------- the last 12 hours: observed against the forecast issued 12 hours earlier ----------
+   The observations workflow (.github/workflows/planning-obs.yml) publishes, on this repository's "obs"
+   branch, the last 27 hours of METARs (metar.json) and an hourly snapshot of the guidance for the next
+   15 hours (snap/YYYYMMDDHH.json: the default blend and every source). The graph's shaded strip and the
+   panel below it use the snapshot from about 12 hours ago, so they show the forecast as it was issued,
+   not the latest runs (which have already seen part of the weather). Until a snapshot that old exists,
+   the past hours fall back to the latest runs, and both say so. */
+const OBS_BASE = (typeof window !== "undefined" && window.OBS_BASE) || "https://raw.githubusercontent.com/jamescarpenter-code/ZJX-Planning/obs/";
+const PAST_H = 12;
+const RECENT = { metar:undefined, snap:undefined, loading:false, at:0, sel:null, key:null };
+/* keys the observations can check: their METAR field, and how to read it */
+const OBS_KEYS = new Set(["t","td","s33","g33","dir","cig","vsm","cw","lt1","lt3","lt6","xmvfr","xifr","xlifr"]);
+const RECENT_KEYS = [["cig","Ceiling"],["vsm","Visibility"],["s33","Wind"],["g33","Gust"],["dir","Direction"],["cw","Crosswind"],["t","Temp"],["td","Dew point"]];
+const pastHours = () => { const now = Math.floor(Date.now()/H)*H, out = []; for (let t = now - PAST_H*H; t < now; t += H) out.push(t); return out; };
+async function loadRecent(force){
+  if (RECENT.loading || (!force && RECENT.at && Date.now() - RECENT.at < 10*60e3)) return;
+  RECENT.loading = true;
+  const ts = Math.floor(Date.now()/300e3);
+  const [m, snap] = await Promise.all([
+    DEMO ? demoMetar() : getJSON(`${OBS_BASE}metar.json?ts=${ts}`, 10000).catch(() => null),
+    DEMO ? null : pickSnapshot(ts).catch(() => null)]);
+  RECENT.metar = m && m.stations ? m : null; RECENT.snap = snap && snap.sites ? snap : null; RECENT.at = Date.now(); RECENT.loading = false;
+  CH.layout = null; renderChart();
 }
-async function recentObsDay(key){
-  if (RECENT.obs[key] !== undefined || RECENT.loading[key]) return;
-  RECENT.loading[key] = true;
-  try { RECENT.obs[key] = DEMO ? demoObsDay(key) : await getJSON(`${DATA_BASE}data/verif/obs/${key}.json?ts=${Date.now()}`, 8000); } catch (e) { RECENT.obs[key] = null; }
-  RECENT.loading[key] = false; renderRecent();
+/* the snapshot nearest 12 hours before now, at or before it if there is one (up to 4 hours older) */
+async function pickSnapshot(ts){
+  const idx = await getJSON(`${OBS_BASE}snap/index.json?ts=${ts}`, 8000);
+  const want = Math.floor(Date.now()/H)*H - PAST_H*H;
+  const c = (idx.files || []).map(f => { const m = f.match(/^(\d{4})(\d{2})(\d{2})(\d{2})\.json$/); return m ? { f, t: Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4]) } : null; })
+    .filter(x => x && x.t <= want + H && x.t >= want - 4*H).sort((a, b) => (a.t > want) - (b.t > want) || Math.abs(a.t - want) - Math.abs(b.t - want));
+  return c.length ? getJSON(`${OBS_BASE}snap/${c[0].f}`, 10000) : null;
 }
-const dayKeyZ = t => new Date(t).toISOString().slice(0, 10).replace(/-/g, "");
-function obsAt(pid, key, t){ const od = RECENT.obs[dayKeyZ(t)]; if (!od) return undefined; const p = (od.points || {})[pid]; if (!p) return null; const f = key === "dir" ? "d33" : key; const a = p[f]; return a ? a[new Date(t).getUTCHours()] : null; }
-/* any tower near a point, at any height: exact, interpolated in log height between two sensors on the
-   same tower, or the nearest sensor within 35 % of the height. field: s (hour mean), g (peak), t */
-function towerChoice(lat, lon, ft, field, od){
-  const tw = od && od.towers; if (!tw) return null;
-  const near = Object.entries(tw).map(([id, r]) => ({ id, r, d: kmBetween(lat, lon, r.lat, r.lon) })).filter(x => x.d <= 4).sort((a, b) => a.d - b.d);
-  for (const { id, r, d } of near){
-    const hs = Object.keys(r.h).map(Number).sort((a, b) => a - b); if (!hs.length) continue;
-    if (field === "t"){ const lo = hs.find(h => r.h[h].t && r.h[h].t.some(v => v != null)); if (lo != null) return { id, d, how:"temp", h:[lo] }; continue; }
-    if (hs.includes(ft)) return { id, d, how:"exact", h:[ft] };
-    const below = hs.filter(h => h < ft).pop(), above = hs.find(h => h > ft);
-    if (below != null && above != null) return { id, d, how:"interp", h:[below, above] };
-    const nearest = hs.reduce((a, b) => Math.abs(b - ft) < Math.abs(a - ft) ? b : a);
-    if (Math.abs(nearest - ft)/ft <= 0.35) return { id, d, how:"nearest", h:[nearest] };
+/* the report nearest the top of the hour (a routine METAR before a SPECI), and whether thunder was reported in the hour after */
+function obsHour(stn, t){
+  const list = RECENT.metar && RECENT.metar.stations[stn]; if (!list) return null;
+  let best = null, bd = Infinity, any = false, ts = false;
+  for (const r of list){
+    const d = r.t - t;
+    if (d >= -35*60e3 && d <= 15*60e3){ const sc = Math.abs(d) + (r.type === "SPECI" ? 10*60e3 : 0); if (sc < bd){ bd = sc; best = r; } }
+    if (d > 0 && d <= H){ any = true; if (r.ts) ts = true; }
+  }
+  if (!best && !any) return null;
+  return Object.assign({}, best || {}, { tsH: any ? ts : null, inHour: list.filter(r => r.t - t > -35*60e3 && r.t - t <= H) });
+}
+function crossOf(site, dir, spd, gst){
+  if (spd == null) return null; if (spd === 0) return 0; if (dir == null || !site.rwy || !site.rwy.length) return null;
+  const g = Math.max(spd, gst ?? spd); let best = null;
+  for (const [, h] of site.rwy){ const x = Math.abs(g*Math.sin((dir - h)*Math.PI/180)); if (best == null || x < best) best = x; }
+  return Math.round(best);
+}
+/* observed value in the page's units; chances as 100 (happened) or 0 (didn't) */
+function obsVal(o, k, site){
+  if (!o) return null;
+  const fc = () => fcatOf(o.cig ?? null, o.vis ?? null);
+  switch (k){
+    case "t": return o.tf ?? null; case "td": return o.td ?? null;
+    case "s33": return o.spd ?? null;
+    case "g33": return o.spd == null ? null : (o.gst ?? o.spd);   /* no gust group: the gust is the wind */
+    case "dir": return o.spd >= 3 && o.dir != null ? o.dir : null;
+    case "cig": return o.cig ?? null; case "vsm": return o.vis ?? null;
+    case "cw": return crossOf(site, o.dir, o.spd, o.gst);
+    case "lt1": case "lt3": case "lt6": return o.tsH == null ? null : o.tsH ? 100 : 0;
+    case "xmvfr": case "xifr": case "xlifr": { const c = fc(); return c == null ? null : c >= { xmvfr:1, xifr:2, xlifr:3 }[k] ? 100 : 0; }
   }
   return null;
 }
-function towerValue(od, ch, ft, field, hour){
-  if (!ch) return null; const r = od.towers[ch.id]; const f = field === "t" ? "t" : field;
-  const v = h => (r.h[h] && r.h[h][f]) ? r.h[h][f][hour] : null;
-  if (ch.h.length === 1) return v(ch.h[0]);
-  const a = v(ch.h[0]), b = v(ch.h[1]); if (a == null || b == null) return null;
-  return a + (b - a)*Math.log(ft/ch.h[0])/Math.log(ch.h[1]/ch.h[0]);
-}
-const towerLabel = (ch, ft) => !ch ? "" : ch.how === "temp" ? `tower ${ch.id}, ${ch.d.toFixed(1)} km` : `tower ${ch.id}${ch.how === "interp" ? `, ${ch.h[0]}–${ch.h[1]} ft interpolated to ${ft} ft` : ch.how === "nearest" ? `, ${ch.h[0]} ft sensor` : `, ${ft} ft`}, ${ch.d.toFixed(1)} km`;
-/* demo: observations near the guidance, so the panel can be tried without the workflow */
-function demoObsDay(key){
-  const G = S.G[prefs.site]; if (!G) return null;
-  const t0 = Date.UTC(+key.slice(0, 4), +key.slice(4, 6) - 1, +key.slice(6, 8)), pts = {};
-  for (const pid of Object.keys(VERIF_PTS)){
-    const Gp = S.G[pid] || G, p = {}; ["t","td","s33","g33","s200","g200","d33","pr","cg10"].forEach(f => p[f] = new Array(24).fill(null));
-    for (let h = 0; h < 24; h++){
-      const t = t0 + h*H; if (t > Date.now() - H) continue;
-      const i = S.TL.idx(t); if (i < 0) continue;
-      const mean = k => { const v = Gp.src.flatMap(s2 => s2.members.map(m => m[k] && m[k][i])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0)/v.length : null; };
-      const jit = (v, sd) => v == null ? null : Math.round((v + (Math.sin(t/3.7e6 + sd)*sd)) * 10)/10;
-      p.t[h] = jit(mean("t"), 1.5); p.td[h] = jit(mean("td"), 1); p.s33[h] = jit(mean("s33"), 2); p.g33[h] = jit(mean("g33"), 3); p.s200[h] = jit(mean("s200"), 2); p.g200[h] = jit(mean("g200"), 3); p.d33[h] = mean("d10"); p.pr[h] = 0; p.cg10[h] = 0;
-    }
-    pts[pid] = p;
-  }
-  /* a demo tower at each point on the page, at its wind heights */
-  const towers = {};
-  for (const st of SITES){
-    const Gs = S.G[st.id]; if (!Gs) continue;
-    const rec = { lat: st.lat + 0.004, lon: st.lon, h:{} };
-    for (const ft of HEIGHTS){
-      const hh = rec.h[ft] = { s:new Array(24).fill(null), sx:new Array(24).fill(null), g:new Array(24).fill(null), t:new Array(24).fill(null) };
-      for (let h = 0; h < 24; h++){
-        const t = t0 + h*H; if (t > Date.now() - H) continue; const i = S.TL.idx(t); if (i < 0) continue;
-        const mean = k => { const v = Gs.src.flatMap(s2 => s2.members.map(m => m[k] && m[k][i])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0)/v.length : null; };
-        const sv = mean("s" + ft), gv = mean("g" + ft), tv = mean("t"), j = Math.sin(t/2.9e6 + ft);
-        hh.s[h] = sv == null ? null : Math.round((sv + 2*j)*10)/10; hh.sx[h] = sv == null ? null : Math.round((sv*1.2 + 2*j)*10)/10;
-        hh.g[h] = gv == null ? null : Math.round((gv + 3*j)*10)/10; hh.t[h] = tv == null ? null : Math.round((tv + j)*10)/10;
-      }
-    }
-    towers[st.tag || st.id] = rec;
-  }
-  return { points: pts, towers };
-}
+const snapAt = (arr, t) => { const sn = RECENT.snap; if (!sn || !arr) return null; const j = Math.round((t - sn.t0)/H); return j >= 0 && j < arr.length ? arr[j] : null; };
+/* member mean of one source at a past hour, from its latest run (the fallback without a snapshot) */
+const MEMBER_KEY = { cig:"cigH", dir:"d10" };
 function pastMean(src, key, i){
-  const v = src.members.map(m => m[key] ? m[key][i] : null).filter(x => x != null); if (!v.length) return null;
-  if (key === "d10"){ let u = 0, w = 0; v.forEach(d => { u += Math.sin(d*Math.PI/180); w += Math.cos(d*Math.PI/180); }); return (Math.atan2(u, w)*180/Math.PI + 360) % 360; }
+  const mk = MEMBER_KEY[key] || key;
+  const v = src.members.map(m => m[mk] ? m[mk][i] : null).filter(x => x != null); if (!v.length) return null;
+  if (key === "dir"){ let u = 0, w = 0; v.forEach(d => { u += Math.sin(d*Math.PI/180); w += Math.cos(d*Math.PI/180); }); return (Math.atan2(u, w)*180/Math.PI + 360) % 360; }
   return v.reduce((a, b) => a + b, 0)/v.length;
 }
+/* the forecast for the past hours: every source and the blend, as issued (snapshot) or from the latest runs */
+function pastForecast(s, key){
+  const hours = pastHours(), sn = RECENT.snap && RECENT.snap.sites[s.id];
+  if (sn){
+    const series = Object.entries(sn.src || {}).filter(([, v]) => v[key]).map(([id, v]) => ({ id, name: (ALL_SOURCES.find(d => d.id === id) || {}).name || id, ys: hours.map(t => snapAt(v[key], t)) })).filter(x => x.ys.some(v => v != null));
+    return { issued: RECENT.snap.t0, series, blend: hours.map(t => snapAt((sn.blend || {})[key], t)) };
+  }
+  const G = S.G[s.id]; if (!G || !S.TL || /^(lt|x)/.test(key)) return { issued:null, series:[], blend: hours.map(() => null) };
+  const on = G.src.filter(x => prefs.enabled[x.def.id] !== false && x.members.length);
+  const series = on.map(x => ({ id:x.def.id, name:x.def.name, ys: hours.map(t => { const i = S.TL.idx(t); return i >= 0 && i < S.TL.n ? pastMean(x, key, i) : null; }) })).filter(x => x.ys.some(v => v != null));
+  const W0 = x => prefs.weight[x.id] ?? (ALL_SOURCES.find(d => d.id === x.id) || {}).w ?? 1;
+  const blend = hours.map((t, i) => {
+    if (key === "dir"){ let u = 0, w = 0; series.forEach(x => { const v = x.ys[i]; if (v == null) return; u += Math.sin(v*Math.PI/180)*W0(x); w += Math.cos(v*Math.PI/180)*W0(x); }); return u || w ? (Math.atan2(u, w)*180/Math.PI + 360) % 360 : null; }
+    let a = 0, w = 0; series.forEach(x => { const v = x.ys[i]; if (v == null) return; a += v*W0(x); w += W0(x); }); return w ? a/w : null;
+  });
+  return { issued:null, series, blend };
+}
+const issuedLabel = () => RECENT.snap ? `issued ${pad2(new Date(RECENT.snap.t0).getUTCHours())}Z` : "latest runs";
+/* ---- the shaded strip on the main graph ---- */
+function pastStrip(ks){
+  if (!IS_PLANNING || prefs.past === false || !ks.some(k => OBS_KEYS.has(k))) return null;
+  if (!RECENT.at && !RECENT.loading) loadRecent(); else if (RECENT.at) loadRecent();
+  return { n: PAST_H, hours: pastHours() };
+}
+function pastValues(ks, PS){
+  const s = site(), out = [];
+  for (const k of ks){ if (!OBS_KEYS.has(k) || P[k].kind === "prob") continue; PS.hours.forEach(t => out.push(obsVal(obsHour(s.stn, t), k, s))); out.push(...pastForecast(s, k).blend); }
+  return out;
+}
+function drawPast(PS, o){
+  const { ks, L0, L, T, B, y, y0, y1, z, pview } = o, s = site(), cw = (L - L0)/PS.n, xp = j => L0 + (j + 0.5)*cw;
+  const clamp = v => y(Math.max(y0, Math.min(y1, v)));
+  let h = `<rect class="pastbg" x="${L0}" y="${T}" width="${L - L0}" height="${B - T}"/><line class="pastsep" x1="${L}" x2="${L}" y1="${T - 2}" y2="${B}"/>`;
+  h += `<text class="pastlab" x="${L0 + 4}" y="${T - 7}">Last ${PS.n} h · obs vs ${issuedLabel()}</text>`;
+  PS.hours.forEach((t, j) => { const hh = z ? new Date(t).getUTCHours() : lp(t).h; if (hh % 3 === 0) h += `<text class="axis" x="${xp(j)}" y="${B + 16}" text-anchor="middle">${pad2(hh)}</text>`; });
+  if (RECENT.metar === undefined){ h += `<text class="pastlab" x="${(L0 + L)/2}" y="${(T + B)/2}" text-anchor="middle">Loading</text>`; return h; }
+  if (!RECENT.metar){ h += `<text class="pastlab" x="${(L0 + L)/2}" y="${(T + B)/2}" text-anchor="middle">No observations yet</text>`; return h; }
+  const fmtV = (k, v) => v == null ? "–" : P[k].kind === "prob" ? Math.round(v) + "%" : k === "vsm" ? (+v).toFixed(v < 3 ? 2 : 1) : k === "dir" ? Math.round(v) + "°" : Math.round(v*(isWind(P[k]) ? wfac() : 1));
+  ks.forEach((k, jk) => {
+    if (!OBS_KEYS.has(k)) return;
+    const prob = P[k].kind === "prob", fc = pastForecast(s, k);
+    /* the forecast as issued: a dashed line (bars for chances) */
+    if (prob){ fc.blend.forEach((v, j) => { if (v == null) return; const pad = Math.min(3, cw*0.2); h += `<rect class="pastbar" x="${(L0 + j*cw + pad).toFixed(1)}" y="${clamp(v).toFixed(1)}" width="${Math.max(1, cw - 2*pad).toFixed(1)}" height="${Math.max(0, B - clamp(v)).toFixed(1)}"/>`; }); }
+    else if (k !== "dir"){ let d = "", pen = false; fc.blend.forEach((v, j) => { if (v == null){ pen = false; return; } d += (pen ? "L" : "M") + xp(j).toFixed(1) + "," + clamp(v).toFixed(1); pen = true; }); if (d) h += `<path class="pastiss${jk ? " pk" : ""}" d="${d}"/>`; }
+    else fc.blend.forEach((v, j) => { if (v != null) h += `<circle class="pastissd" cx="${xp(j)}" cy="${clamp(v)}" r="2.6"/>`; });
+    /* observations */
+    PS.hours.forEach((t, j) => {
+      const ob = obsHour(s.stn, t), v = obsVal(ob, k, s); if (v == null) return;
+      if ((k === "g33" && ob.gst == null) || (prob && pview && jk)) return;   /* gusts only when reported; one row of thunder marks */
+      const raw = ob && ob.raw ? ob.raw : (ob && ob.inHour && ob.inHour[0] ? ob.inHour[0].raw : "");
+      const tip = `${hhmm(t, z)}${z ? "Z" : ""} observed ${prob ? (v ? "yes" : "no") : fmtV(k, v)} · forecast ${issuedLabel()}: ${fmtV(k, fc.blend[j])}${raw ? "\n" + raw : ""}`.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      if (prob){ const yy = v ? T + 7 : B - 5; h += `<circle class="${v ? "pastev" : "pastno"}" cx="${xp(j)}" cy="${yy}" r="${v ? 4.2 : 3}"><title>${tip}</title></circle>`; }
+      else h += `<circle class="pastobs${jk ? " pk" : ""}" cx="${xp(j)}" cy="${clamp(v)}" r="3.8"><title>${tip}</title></circle>`;
+    });
+  });
+  return h;
+}
+/* demo observations (?demo=1): the guidance with some noise */
+function demoMetar(){
+  const st = {};
+  for (const s of SITES){
+    const G = S.G[s.id], list = []; if (!G || !S.TL) continue;
+    for (const t of pastHours()){
+      const i = S.TL.idx(t), mean = k => { const v = G.src.flatMap(x => x.members.map(m => m[k] && m[k][i])).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0)/v.length : null; };
+      const j = Math.sin(t/3.7e6 + s.lat), sp = mean("s33");
+      list.push({ t: t - 7*60e3, type:"METAR", cig: Math.max(3, Math.round((mean("cigH") ?? 120) + 15*j)), vis: 10, tf: mean("t") == null ? null : Math.round(mean("t") + 2*j), td: mean("td") == null ? null : Math.round(mean("td") + j), dir: mean("d10") == null ? null : Math.round(mean("d10")/10)*10, spd: sp == null ? null : Math.max(0, Math.round(sp + 3*j)), gst: null, wx:"", ts: 0, raw:`${s.stn} DEMO` });
+    }
+    st[s.stn] = list;
+  }
+  return { generated: new Date().toISOString(), stations: st };
+}
+/* ---- the panel: every source against the observations, last 12 hours ---- */
 function renderRecent(){
   const box = $("recentBody"); if (!box) return;
   const s = site(), G = S.G[s.id]; if (!G || !S.TL){ box.innerHTML = `<p class="mut">Waiting for guidance.</p>`; return; }
-  const keysAll = keysOf(prefs.param);
-  const cons = P[keysAll[0]] && P[keysAll[0]].cons ? P[keysAll[0]] : null;
-  let keys = cons ? [cons.ex === "tmax" || cons.ex === "tmin" ? "t" : cons.ex] : keysAll.filter(k => /^(t|td|dir)$/.test(k) || /^[sg]\d+$/.test(k));
-  const [pid0, dist0] = obsPointFor(s);
-  const pid = pid0, dist = dist0;
-  const now = Math.floor(Date.now()/H)*H, hours = []; for (let t = now - 24*H; t < now; t += H) hours.push(t);
-  if (DEMO) [...new Set(hours.map(dayKeyZ))].forEach(k => { RECENT.obs[k] = demoObsDay(k); });
-  else [...new Set(hours.map(dayKeyZ))].forEach(recentObsDay);
-  if (!keys.length){
-    box.innerHTML = `<p class="mut">Pick temperature, dew point, a wind height, direction or a constraint on the graph to compare with observations.</p>`; $("recentSum").textContent = ""; return;
-  }
-  if (RECENT.part >= keys.length) RECENT.part = 0;
-  const key = keys[RECENT.part], mkey = key === "dir" ? "d10" : key, p = P[key] || { l:key, unit:"" };
-  /* observations: the forecast point's own record for its standard fields, otherwise the nearest tower at this height */
-  const hm = key.match(/^([sg])(\d+)$/), ft = hm ? +hm[2] : null;
-  const ownPoint = pid && !dist && (!hm || ft === 54 || ft === 200);
-  let obsLabel = "", ch = null;
-  const obs = hours.map(t => {
-    const od = RECENT.obs[dayKeyZ(t)]; if (od === undefined) return undefined; if (!od) return null;
-    if (ownPoint || (!hm && key !== "t") || (key === "t" && pid && dist < 3)) return obsAt(pid, key, t);
-    if (hm || key === "t"){ ch = ch || towerChoice(s.lat, s.lon, ft || 6, hm ? hm[1] : "t", od); return towerValue(od, ch, ft, hm ? hm[1] : "t", new Date(t).getUTCHours()); }
-    return pid ? obsAt(pid, key, t) : null;
-  });
-  obsLabel = ch ? towerLabel(ch, ft) : pid ? `${PNAMES[pid] || pid}${dist ? `, ${dist.toFixed(1)} km away` : ""}` : "";
-  if (obs.every(v => v === undefined)){ box.innerHTML = `<p class="mut">Loading observations…</p>`; return; }
-  if (obs.every(v => v == null)){ box.innerHTML = `<p class="mut">No observations for ${p.title || p.l} near ${s.name} in the last 24 hours${hm ? ` (no tower within 4 km has a sensor near ${ft} ft)` : ""}.</p>`; $("recentSum").textContent = "no observations"; return; }
-  const on = G.src.filter(x => prefs.enabled[x.def.id] !== false && x.members.length);
-  const series = on.map(x => ({ id:x.def.id, name:x.def.name, fam:x.def.fam, ys: hours.map(t => { const i = S.TL.idx(t); return i >= 0 && i < S.TL.n ? pastMean(x, mkey, i) : null; }) })).filter(x => x.ys.some(v => v != null));
+  if (RECENT.metar === undefined){ loadRecent(); box.innerHTML = `<p class="mut">Loading observations…</p>`; return; }
+  if (!RECENT.metar){ box.innerHTML = `<p class="mut">No observations yet. The <i>Planning forecast observations</i> workflow publishes the METARs every 15 minutes; once it has run, the last ${PAST_H} hours show here.</p>`; $("recentSum").textContent = ""; return; }
+  const hours = pastHours(), obsH = hours.map(t => obsHour(s.stn, t));
+  const view = keysOf(prefs.param), key = RECENT.key || (RECENT_KEYS.find(([k]) => view.includes(k)) || RECENT_KEYS[0])[0];
+  const p = P[key], name = (RECENT_KEYS.find(([k]) => k === key) || [key, p.l])[1].toLowerCase(), fc = pastForecast(s, key), obs = obsH.map(o => obsVal(o, key, s));
+  /* flight category: the blend's ceiling and visibility against the observed category */
+  const fcig = pastForecast(s, "cig").blend, fvis = pastForecast(s, "vsm").blend;
+  let catN = 0, catHit = 0; obsH.forEach((o, i) => { const oc = o ? fcatOf(o.cig ?? null, o.vis ?? null) : null, gc = fcatOf(fcig[i] ?? null, fvis[i] ?? null); if (oc == null || gc == null) return; catN++; if (oc === gc) catHit++; });
+  const catTxt = catN ? `flight category right ${catHit} of ${catN} hours` : "";
+  $("recentSum").textContent = `${catTxt}${catTxt ? " · " : ""}${RECENT.snap ? `forecast ${issuedLabel()}` : "latest runs (no snapshot from 12 h ago yet)"}`;
+  if (obs.every(v => v == null)){ box.innerHTML = `${partButtons(key)}<p class="mut">No ${name} observations from ${s.stn} in the last ${PAST_H} hours.</p>`; return; }
+  /* ceiling and visibility verify by category (an error in feet means little between 8000 ft and none); the rest by error */
+  const catK = key === "cig" || key === "vsm", catOf = v => v == null ? null : key === "cig" ? fcatOf(v, null) : fcatOf(null, v);
   const err = (a, b) => key === "dir" ? ((a - b + 540) % 360) - 180 : a - b;
-  const stat = ys => { let n = 0, ae = 0, e = 0; ys.forEach((v, i) => { const o = obs[i]; if (v == null || o == null || (key === "dir" && (obsAt(pid, "s33", hours[i]) || 0) < 5)) return; const d = err(v, o); n++; ae += Math.abs(d); e += d; }); return n ? { n, mae: ae/n, bias: e/n } : null; };
-  series.forEach(x => { x.st = stat(x.ys); x.af = autoFactor(G, prefs, x.id, key === "dir" ? "dir" : key, Date.now() + 3*H); });
-  const W0 = x => prefs.weight[x.id] ?? (ALL_SOURCES.find(d => d.id === x.id) || {}).w ?? 1;
-  const blend = hours.map((t, i) => { let a = 0, w = 0; series.forEach(x => { const v = x.ys[i]; if (v == null) return; const ww = W0(x)*(x.af || 1); a += v*ww; w += ww; }); return w ? a/w : null; });
-  const bst = stat(blend);
-  const ranked = series.filter(x => x.st).sort((a, b) => a.st.mae - b.st.mae);
-  const sel = RECENT.sel && series.find(x => x.id === RECENT.sel) ? RECENT.sel : null;
-  const top = ranked.slice(0, 3).map(x => x.id);
+  const stat = ys => {
+    let n = 0, ae = 0, e = 0, hit = 0, lo = 0, hi = 0;
+    ys.forEach((v, i) => { const o = obs[i]; if (v == null || o == null) return; n++;
+      if (catK){ const a = catOf(v), b = catOf(o); if (a === b) hit++; else if (a > b) lo++; else hi++; return; }
+      const d = err(v, o); ae += Math.abs(d); e += d; });
+    return n ? { n, mae: ae/n, bias: e/n, hit, lo, hi } : null;
+  };
+  const series = fc.series; series.forEach(x => { x.st = stat(x.ys); });
+  const bst = stat(fc.blend);
+  const rank = x => catK ? -(x.st.hit/x.st.n) + 1e-3*(x.st.lo + x.st.hi) : x.st.mae;
+  const ranked = series.filter(x => x.st).sort((a, b) => rank(a) - rank(b));
+  const sel = RECENT.sel && series.find(x => x.id === RECENT.sel) ? RECENT.sel : null, top = ranked.slice(0, 3).map(x => x.id);
   /* chart */
   const Wd = 760, Hd = 230, L = 44, Rr = 12, T = 14, B = 26, sc = isWind(p) ? wfac() : 1;
-  const all = [...obs, ...blend, ...series.flatMap(x => x.ys), ...(cons && cons.v != null ? [cons.v] : [])].filter(v => v != null && isFinite(v)).map(v => v*sc);
-  let lo = Math.min(...all), hi = Math.max(...all); if (key === "dir"){ lo = 0; hi = 360; } else { const pad = Math.max(1, (hi - lo)*0.08); lo = Math.floor(lo - pad); hi = Math.ceil(hi + pad); }
+  const all = [...obs, ...fc.blend, ...series.flatMap(x => x.ys)].filter(v => v != null && isFinite(v)).map(v => v*sc);
+  let lo = Math.min(...all), hi = Math.max(...all);
+  let stp = 90;
+  if (key === "dir"){ lo = 0; hi = 360; } else { const pad = Math.max(key === "vsm" ? 0.2 : 1, (hi - lo)*0.08); stp = niceStep(Math.max(key === "vsm" ? 0.5 : 1, (hi - lo + 2*pad)/4)); lo = Math.floor((lo - pad)/stp)*stp; hi = Math.ceil((hi + pad)/stp)*stp; if (p.lo === 0) lo = Math.max(0, lo); }
   const x = i => L + (i + 0.5)*(Wd - L - Rr)/hours.length, y = v => T + (1 - (v*sc - lo)/(hi - lo || 1))*(Hd - T - B);
-  const path = ys => { const pts = ys.map((v, i) => v == null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`); let d = "", pen = false; pts.forEach(q => { if (!q){ pen = false; return; } d += (pen ? "L" : "M") + q; pen = true; }); return d; };
+  const path = ys => { let d = "", pen = false; ys.forEach((v, i) => { if (v == null){ pen = false; return; } d += (pen ? "L" : "M") + `${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; }); return d; };
   const COL = ["#0E7C86","#B5862B","#5A6ACF"];
-  let g = `<svg viewBox="0 0 ${Wd} ${Hd}" class="rchart" role="img" aria-label="Last 24 hours of ${p.l} observed against the guidance">`;
-  for (let k = 0; k <= 4; k++){ const v = lo + (hi - lo)*k/4; const yy = T + (1 - k/4)*(Hd - T - B); g += `<line x1="${L}" x2="${Wd - Rr}" y1="${yy}" y2="${yy}" class="gr"/><text x="${L - 6}" y="${yy + 4}" class="ax" text-anchor="end">${Math.round(v)}</text>`; }
-  hours.forEach((t, i) => { if (i % 3 === 0) g += `<text x="${x(i)}" y="${Hd - 8}" class="ax" text-anchor="middle">${hhmm(t, zulu()).slice(0, 2)}${zulu() ? "Z" : ""}</text>`; });
+  let g = `<svg viewBox="0 0 ${Wd} ${Hd}" class="rchart" role="img" aria-label="Last ${PAST_H} hours of ${name} observed at ${s.stn} against the forecast">`;
+  for (let v = lo; v <= hi + 1e-9; v += stp){ const yy = y(v/sc); g += `<line x1="${L}" x2="${Wd - Rr}" y1="${yy}" y2="${yy}" class="gr"/><text x="${L - 6}" y="${yy + 4}" class="ax" text-anchor="end">${key === "dir" ? compass(v) : stp < 1 ? v.toFixed(1) : Math.round(v)}</text>`; }
+  hours.forEach((t, i) => { if (i % 2 === 0) g += `<text x="${x(i)}" y="${Hd - 8}" class="ax" text-anchor="middle">${hhmm(t, zulu()).slice(0, 2)}${zulu() ? "Z" : ""}</text>`; });
   series.forEach(xs => { if (!top.includes(xs.id) && xs.id !== sel) g += `<path d="${path(xs.ys)}" class="rsrc"/>`; });
   top.forEach((id, k) => { const xs = series.find(q => q.id === id); if (xs && id !== sel) g += `<path d="${path(xs.ys)}" fill="none" stroke="${COL[k]}" stroke-width="1.8"/>`; });
   if (sel){ const xs = series.find(q => q.id === sel); g += `<path d="${path(xs.ys)}" fill="none" stroke="#C0462F" stroke-width="2.6"/>`; }
-  g += `<path d="${path(blend)}" fill="none" stroke="var(--ink)" stroke-width="2.4" stroke-dasharray="6 4"/>`;
-  if (cons && cons.v != null && cons.v*sc >= lo && cons.v*sc <= hi) g += `<line x1="${L}" x2="${Wd - Rr}" y1="${y(cons.v)}" y2="${y(cons.v)}" stroke="#B23A2E" stroke-width="1.6" stroke-dasharray="3 3"/><text x="${Wd - Rr - 4}" y="${y(cons.v) - 5}" class="ax" text-anchor="end" fill="#B23A2E">limit ${Math.round(cons.v*sc)}</text>`;
-  obs.forEach((v, i) => { if (v != null) g += `<circle cx="${x(i)}" cy="${y(v)}" r="3.6" class="robs"><title>${hhmm(hours[i], zulu())} observed ${Math.round(v*sc)}${isWind(p) ? " " + wuLabel() : p.unit === "°F" ? "°F" : ""}</title></circle>`; });
+  g += `<path d="${path(fc.blend)}" fill="none" stroke="var(--ink)" stroke-width="2.4" stroke-dasharray="6 4"/>`;
+  obs.forEach((v, i) => { if (v != null) g += `<circle cx="${x(i)}" cy="${y(v)}" r="3.6" class="robs"><title>${hhmm(hours[i], zulu())} observed ${key === "vsm" ? v : Math.round(v*sc)}${obsH[i] && obsH[i].raw ? "\n" + obsH[i].raw.replace(/&/g, "&amp;").replace(/</g, "&lt;") : ""}</title></circle>`; });
   g += `</svg>`;
-  const met = cons ? obs.filter(v => v != null && (cons.op === ">" ? v > cons.v : cons.op === ">=" ? v >= cons.v : cons.op === "<=" ? v <= cons.v : v < cons.v)).length : null;
-  const legend = `<div class="rleg"><span><i class="o"></i>Observed${obsLabel ? ` (${obsLabel})` : ""}</span><span><i style="border-top:2px dashed var(--ink)"></i>Blend</span>${top.map((id, k) => `<span><i style="background:${COL[k]}"></i>${series.find(q => q.id === id).name}</span>`).join("")}${sel ? `<span><i style="background:#C0462F"></i>${series.find(q => q.id === sel).name}</span>` : ""}<span><i style="background:var(--rule)"></i>Other sources</span></div>`;
+  const legend = `<div class="rleg"><span><i class="o"></i>Observed (${s.stn} METAR)</span><span><i style="border-top:2px dashed var(--ink)"></i>Blend</span>${top.map((id, k) => `<span><i style="background:${COL[k]}"></i>${series.find(q => q.id === id).name}</span>`).join("")}</div>`;
   const fmtE = v => (isWind(p) ? v*wfac() : v).toFixed(1);
-  const tbl = `<table class="rtab"><thead><tr><th>Source</th><th>MAE</th><th>Bias</th><th>Hours</th><th>Auto</th></tr></thead><tbody>
-    ${bst ? `<tr class="bl"><th>Blend</th><td>${fmtE(bst.mae)}</td><td>${bst.bias >= 0 ? "+" : ""}${fmtE(bst.bias)}</td><td>${bst.n}</td><td></td></tr>` : ""}
-    ${ranked.map(xs => `<tr data-rs="${xs.id}" class="${xs.id === sel ? "on" : ""}"><th>${xs.name}</th><td>${fmtE(xs.st.mae)}</td><td>${xs.st.bias >= 0 ? "+" : ""}${fmtE(xs.st.bias)}</td><td>${xs.st.n}</td><td>${Math.abs((xs.af || 1) - 1) >= 0.05 ? "×" + xs.af.toFixed(2) : ""}</td></tr>`).join("")}</tbody></table>`;
-  const unitTxt = key === "dir" ? "degrees" : isWind(p) ? wuLabel() : p.unit || "";
-  box.innerHTML = `${keys.length > 1 ? `<div class="seg rpart" role="group">${keys.map((k, i) => `<button type="button" data-rp="${i}" aria-pressed="${i === RECENT.part}">${(P[k] || {}).s || k}</button>`).join("")}</div>` : ""}
-    <div class="rgrid"><div>${g}${legend}</div><div class="rtw">${tbl}<p class="mut">Last 24 hours at ${s.name}, ${p.l}${p.s ? " " + p.s : ""}, ${unitTxt}. Model values for past hours come from their recent runs. Click a source to highlight it.</p></div></div>`;
-  $("recentSum").textContent = (ranked.length ? `best last 24 h: ${ranked[0].name} (${fmtE(ranked[0].st.mae)} ${unitTxt})${bst ? `, blend ${fmtE(bst.mae)}` : ""}` : "") + (cons ? ` · ${met} of ${obs.filter(v => v != null).length} observed hours met the constraint` : "");
+  const cells = st => catK ? `<td>${st.hit} of ${st.n}</td><td>${st.lo}</td><td>${st.hi}</td>` : `<td>${fmtE(st.mae)}</td><td>${st.bias >= 0 ? "+" : ""}${fmtE(st.bias)}</td><td>${st.n}</td>`;
+  const head = catK ? `<th>Category right</th><th>Too low</th><th>Too high</th>` : `<th>MAE</th><th>Bias</th><th>Hours</th>`;
+  const tbl = `<table class="rtab"><thead><tr><th>Source</th>${head}</tr></thead><tbody>
+    ${bst ? `<tr class="bl"><th>Blend</th>${cells(bst)}</tr>` : ""}
+    ${ranked.map(xs => `<tr data-rs="${xs.id}" class="${xs.id === sel ? "on" : ""}"><th>${xs.name}</th>${cells(xs.st)}</tr>`).join("")}</tbody></table>`;
+  const unitTxt = key === "dir" ? "degrees" : isWind(p) ? wuLabel() : key === "cig" ? "hundreds of ft (120 = none)" : p.unit || "";
+  box.innerHTML = `${partButtons(key)}<div class="rgrid"><div>${g}${legend}</div><div><div class="rtw">${tbl}</div><p class="mut">Last ${PAST_H} hours at ${s.name} (${s.stn}), ${name}, ${unitTxt}. ${RECENT.snap ? `The forecast is the guidance ${issuedLabel()} (${Math.round((Date.now() - RECENT.snap.t0)/H)} h ago), with the default blend settings.` : "No guidance snapshot from 12 hours ago yet, so these are the sources' latest runs, which have already seen some of the weather."}${catK ? " Ceiling and visibility are scored by flight category: too low is a forecast worse than observed." : key === "g33" ? " Hours without a gust group count the wind as the gust." : ""} Click a source to highlight it.</p></div></div>`;
 }
-const PNAMES = { "ksc-inland":"SLF towers", "ksc-pads":"LC-39B towers", "cape-inland":"KXMR towers", "cape-pad37":"SLC-37 towers", "patrick":"KCOF" };
+const partButtons = key => `<div class="seg rpart" role="group">${RECENT_KEYS.map(([k, l]) => `<button type="button" data-rp="${k}" aria-pressed="${k === key}">${l}</button>`).join("")}</div>`;
 
 /* ---------- editing ---------- */
 function parseInput(p, txt){
@@ -1983,9 +2038,10 @@ function renderChart(fgOnly){
     : "Click a point to select it, or drag across the graph to select several. Then drag a selected point, or use the arrow keys, to move them. Shift-click adds points. Hold Ctrl to see the guidance values.";
   updateSelInfo();
   const pview = isProbView(view);
-  if (!fgOnly) $("legend").innerHTML = pview
+  const pastBtn = IS_PLANNING && ks.some(k => OBS_KEYS.has(k)) ? `${prefs.past !== false ? `<span><i class="po"></i>Observed</span><span><i class="pi"></i>${RECENT.snap || !RECENT.at ? "Forecast 12 h earlier" : "Guidance (latest runs)"}</span>` : ""}<button type="button" class="btn sm pastbtn" data-past="1" title="Show or hide the last 12 hours of METARs against the forecast issued 12 hours ago">${prefs.past !== false ? "Hide" : "Show"} last 12 h</button>` : "";
+  if (!fgOnly) $("legend").innerHTML = (pview
     ? `<span><i class="bar"></i>1 hr</span><span><i class="off"></i>3 hr</span><span><i class="off pk"></i>6 hr</span><span><i class="gd"></i>Guidance</span>`
-    : `<span><i class="off"></i>${combo ? "Sustained" : "Official"}</span>${combo ? `<span><i class="off pk"></i>Peak</span>` : ""}<span><i class="gd"></i>Guidance blend</span><span><i class="src"></i>Sources</span><span><i class="bd"></i>Member 10th to 90th</span>`;
+    : `<span><i class="off"></i>${combo ? "Sustained" : "Official"}</span>${combo ? `<span><i class="off pk"></i>Peak</span>` : ""}<span><i class="gd"></i>Guidance blend</span><span><i class="src"></i>Sources</span><span><i class="bd"></i>Member 10th to 90th</span>`) + pastBtn;
   if (combo && !fgOnly){ const dk = drawKey(ks) || "n"; $("drawSel").innerHTML = `<button type="button" data-d="n" aria-pressed="${dk === "n"}" title="Draw whichever line you start nearest">Nearest</button>` + ks.map((k, j) => `<button type="button" data-d="${k}" aria-pressed="${dk === k}">${VIEWS[view].names[j]}</button>`).join(""); }
   if (pview && prefs.cmode !== "draw") $("phint").textContent = (prefs.linkWin !== false ? "1, 3 and 6 hr are linked: change any of them and the others follow. " : "") + "Click a bar or step to select it, or drag across the graph to select the hourly or block values. Drag or use the arrow keys to move them. Hold Ctrl to see the guidance values.";
   const W = svg.clientWidth || 900, Hh = CH.h; CH.w = W;
@@ -1998,13 +2054,17 @@ function renderChart(fgOnly){
   /* domain across every series in the view */
   const merged = {}; ks.forEach((k, j) => { const sv = srcOf(k); for (const id in sv) merged[id + "_" + j] = sv[id]; });
   const bandAll = { band:{ [p.k]: rows.map((r, i) => { const bs = ks.map(k => (A.band[k] || [])[i]).filter(Boolean); return bs.length ? [Math.min(...bs.map(b => b[0])), Math.max(...bs.map(b => b[1]))] : null; }) } };
-  const layoutKey = [view, s.id, svg.clientWidth || 900, zulu(), S.rows.length, wuLabel()].join("|");
+  /* the last 12 hours, observed against the forecast issued then (see pastStrip) */
+  const PS = pastStrip(ks);
+  if (PS) merged.__past = pastValues(ks, PS);
+  const layoutKey = [view, s.id, svg.clientWidth || 900, zulu(), S.rows.length, wuLabel(), PS ? RECENT.at + "_" + (RECENT.snap ? RECENT.snap.t0 : 0) : "-"].join("|");
   const full = !fgOnly || !CH.layout || CH.layout.key !== layoutKey;
   const sc = isWind(p) ? wfac() : 1;
   const dom = full ? chartDomain(p, allPts, bandAll, merged) : null;
   const [y0, y1] = !full ? [CH.layout.y0, CH.layout.y1] : sc === 1 ? dom : [Math.floor(dom[0]*sc), Math.ceil(dom[1]*sc)];
   if (full) CH.layout = { key:layoutKey, y0, y1 };
-  const L = CH.m.l, R = W - CH.m.r, T = CH.m.t, B = Hh - CH.m.b;
+  const L0 = CH.m.l, R = W - CH.m.r, T = CH.m.t, B = Hh - CH.m.b, L = PS ? L0 + PS.n*(R - L0)/(n + PS.n) : L0;
+  CH.Lf = L;
   const x = i => L + (i + 0.5) * (R - L)/n, yD = v => B - (v - y0)/(y1 - y0)*(B - T), y = v => yD(v*sc);
   const colW = (R - L)/n;
   const spanOf = (k, i) => { const sp = spanMap(k)[i]; return sp && sp.s ? sp.s : 1; };
@@ -2023,11 +2083,12 @@ function renderChart(fgOnly){
   }
   const step = p.kind === "dir" ? 90 : p.kind === "prob" || p.kind === "sky" ? 20 : niceStep((y1 - y0)/5);
   if (full){
-  for (let v = Math.ceil(y0/step)*step; v <= y1 + 1e-9; v += step){ const yy = yD(v); h += `<line class="grid" x1="${L}" x2="${R}" y1="${yy}" y2="${yy}"/><text class="axis" x="${L - 7}" y="${yy + 4}" text-anchor="end">${p.kind === "dir" ? compass(v) : v}</text>`; }
+  for (let v = Math.ceil(y0/step)*step; v <= y1 + 1e-9; v += step){ const yy = yD(v); h += `<line class="grid" x1="${L0}" x2="${R}" y1="${yy}" y2="${yy}"/><text class="axis" x="${L0 - 7}" y="${yy + 4}" text-anchor="end">${p.kind === "dir" ? compass(v) : v}</text>`; }
   rows.forEach((r, i) => { const hh = z ? new Date(r.a).getUTCHours() : r.lh; if (hh % 6 === 0 && (r.len < 6 || hh % 12 === 0)) h += `<text class="axis" x="${x(i)}" y="${B + 16}" text-anchor="middle">${pad2(hh)}</text>`; });
   const tempThr = () => EXPO ? PARAMS.filter(q => q.ex === "tmax" || q.ex === "tmin").map(q => Math.round(q.v)) : [hotOf(s), 40, 32];
   const thr = pview ? [] : combo ? [...new Set(ks.flatMap(k => P[k].thr || []))] : p.thr ? p.thr.slice() : p.k === "t" ? tempThr() : p.k === "wbgt" ? [82, 85, 88, 90] : [];
   thr.filter(v => v*sc > y0 && v*sc < y1).forEach(v => { h += `<line class="thr" x1="${L}" x2="${R}" y1="${y(v)}" y2="${y(v)}"/><text class="thrlab" x="${R - 3}" y="${y(v) - 4}" text-anchor="end">${p.unit === "kt" ? Math.round(v*sc) + " " + wuLabel() : v + "°"}</text>`; });
+  if (PS) h += drawPast(PS, { ks, L0, L, T, B, y, y0, y1, z, pview });
   if (p.kind === "sky") SKY.forEach(([c, a, b]) => { const yy = y(Math.min(100, (a + Math.min(b, 100))/2)); h += `<text class="thrlab" style="fill:var(--ink-3)" x="${R - 3}" y="${yy + 4}" text-anchor="end">${c}</text>`; if (a > 0) h += `<line class="grid" x1="${L}" x2="${R}" y1="${y(a)}" y2="${y(a)}" style="stroke-dasharray:2 3"/>`; });
   }
   const line = (arr, cls, style, xf) => { xf = xf || x; let d = "", pen = false; arr.forEach((v, i) => { if (v === undefined && na[i]) return; if (v == null || !isFinite(v)){ pen = false; return; } d += (pen ? "L" : "M") + xf(i).toFixed(1) + "," + y(Math.max(y0, Math.min(y1, v))).toFixed(1); pen = true; }); return d ? `<path class="${cls}" d="${d}" style="${style || ""}"/>` : ""; };
@@ -2182,6 +2243,7 @@ function bindChart(){
   const svg = $("chart");
   svg.addEventListener("pointerdown", ev => {
     if (ev.button !== 0 || P[keysOf(prefs.param)[0]].kind === "sev") return;
+    { const r = $("chart").getBoundingClientRect(); if (CH.Lf && (ev.clientX - r.left)*(CH.w/r.width) < CH.Lf - 2) return; }   /* the past-hours strip isn't editable */
     svg.focus({ preventScroll:true });
     svg.setPointerCapture(ev.pointerId);
     const { px, py } = chartPos(ev);
@@ -3920,10 +3982,12 @@ function bind(){
     else if (b.id === "conClose") cd.close();
     else if (b.id === "conCarry"){ carryAll(prefs.site); openConsistency(); }
   });
+  const lg = document.getElementById("legend");
+  if (lg) lg.addEventListener("click", ev => { if (ev.target.closest("[data-past]")){ prefs.past = prefs.past === false; savePrefs(); CH.layout = null; renderChart(); } });
   const rb = document.getElementById("recentBody");
   if (rb) rb.addEventListener("click", ev => {
     const r = ev.target.closest("[data-rs]"); if (r){ RECENT.sel = RECENT.sel === r.dataset.rs ? null : r.dataset.rs; renderRecent(); return; }
-    const b = ev.target.closest("[data-rp]"); if (b){ RECENT.part = +b.dataset.rp; renderRecent(); }
+    const b = ev.target.closest("[data-rp]"); if (b){ RECENT.key = b.dataset.rp; RECENT.sel = null; renderRecent(); }
   });
   const awEl = document.getElementById("autoW");
   if (awEl) awEl.addEventListener("change", e => { prefs.autoW = e.target.checked; savePrefs(); recomputeAgg(); renderAll(); renderSources(); });

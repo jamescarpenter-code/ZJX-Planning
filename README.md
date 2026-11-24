@@ -42,6 +42,14 @@ be edited on the graph or in the table; edits stay in the browser.
 * **Surface wind**: 10 m sustained, gust and direction, with chances of gusts over 25 and 35 kt.
 * **Runway crosswind**: the gust crosswind on the runway best aligned with the wind, with chances of more
   than 15 and 20 kt. It comes from the guidance, so after editing wind or direction check it by hand.
+* **Last 12 hours: observed vs forecast**: a shaded strip at the left of the graph shows the last 12 hours of
+  METARs (dots; hover for the report) against the guidance blend as issued about 12 hours earlier (dashed), for
+  ceiling, visibility, wind and gust, direction, crosswind, temperature, dew point, thunder (TS or VCTS in the hour)
+  and the flight category chances. **Hide last 12 h** above the graph turns it off. The panel under the graph scores
+  every source over the same hours: ceiling and visibility by flight category, the rest by mean error and bias.
+  The METARs (aviationweather.gov) and an hourly snapshot of the guidance come from the *Planning forecast
+  observations* workflow, which publishes them on the `obs` branch (one commit, replaced each run, so the
+  repository doesn't grow). Until a snapshot from 12 hours ago exists the past hours use the latest runs, and say so.
 * **TMU brief** (replaces the Leadership quick look): a one-page summary of thunderstorms, IFR/LIFR/MVFR,
   crosswind, gusts, freeze, SPC and WPC risks across the airports by day, with an editable bottom line and
   key concerns. Download as PDF or HTML, or copy as text. Rain is off by default (turn it on under
