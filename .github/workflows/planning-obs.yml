@@ -1,0 +1,56 @@
+name: Planning forecast observations
+
+# METARs for the last 27 hours (every 15 minutes) and, once an hour, a snapshot of the guidance blend
+# for the next 15 hours. The planning page reads both from the "obs" branch to show the last 12 hours
+# observed against the forecast issued 12 hours earlier. The branch keeps only the latest files
+# (one commit, replaced each run), so the frequent updates don't grow the repository.
+
+on:
+  schedule:
+    - cron: "5,20,35,50 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["pipeline/planning_obs.py", "pipeline/planning_snapshot.mjs", ".github/workflows/planning-obs.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: planning-obs
+  cancel-in-progress: false
+
+jobs:
+  obs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Current files from the obs branch
+        run: |
+          mkdir -p obsdata
+          if git fetch --depth=1 origin obs 2>/dev/null; then git archive FETCH_HEAD | tar -x -C obsdata; fi
+          ls -la obsdata obsdata/snap 2>/dev/null || true
+      - name: METARs
+        run: python pipeline/planning_obs.py obsdata/metar.json
+      - name: Guidance snapshot (once an hour)
+        run: |
+          f="obsdata/snap/$(date -u +%Y%m%d%H).json"
+          if [ -f "$f" ]; then echo "already have $f"; else node pipeline/planning_snapshot.mjs obsdata/snap || echo "snapshot failed; METARs still published"; fi
+      - name: Publish to the obs branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd obsdata
+          git init -q -b obs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Observations and guidance snapshots $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" obs
